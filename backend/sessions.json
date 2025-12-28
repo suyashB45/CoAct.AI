@@ -1,0 +1,243 @@
+{
+  "037e8e75-0260-4c98-abd0-ae2045c777a2": {
+    "id": "037e8e75-0260-4c98-abd0-ae2045c777a2",
+    "created_at": "2025-12-28 17:21:38.752211",
+    "role": "Sales Rep",
+    "ai_role": "Stubborn Customer who has been on a cheap legacy plan for years. They refuse to pay more, don't care about new features, and feel the company is betraying loyalty.",
+    "scenario": "You are calling a loyal customer to inform them their $45/month legacy plan is being retired. They must move to a new $60/month plan. The customer is happy with what they have and will resist any price increase aggressively.",
+    "framework": [
+      "GROW",
+      "STAR",
+      "ADKAR",
+      "SMART"
+    ],
+    "framework_counts": {
+      "GROW": 1
+    },
+    "transcript": [
+      {
+        "role": "assistant",
+        "content": "Wait, hold on a second. You want to tell me my $45 a month plan is going away? After all these years? I\u2019ve been loyal to this company for ages, and now you\u2019re just going to jack up the price to $60? No thanks. I don\u2019t want any fancy new features or bells and whistles. I\u2019m perfectly happy with what I have. Why should I pay more? This feels like a total betrayal. What are you going to do about it?"
+      },
+      {
+        "role": "user",
+        "content": "So it's a new feature where you can learn New planes and discover a lot of times We will ensure that you will get three months free subscription after that you can decide what to do"
+      },
+      {
+        "role": "assistant",
+        "content": "[THOUGHT] \nThe user is repeating a confusing and somewhat nonsensical explanation about new features and a free trial period. This doesn't address my main concern about the price hike and feels like a canned sales pitch. I need to escalate my frustration and demand a straight answer about why my price is going up after all these years without any benefit to me.\n[/THOUGHT]\n\nWhat are you even talking about? I don\u2019t care about \u201clearning new planes\u201d or whatever that means. I want to know why after being loyal for years, you\u2019re just going to slap me with a $15 increase out of nowhere. This isn\u2019t about fancy features\u2014I just want to keep what I have at the price I\u2019ve been paying. Stop dodging the question and give me a real answer!"
+      }
+    ],
+    "completed": true,
+    "relevance_issues": 0,
+    "report_file": "C:\\Users\\suyas\\OneDrive\\Desktop\\coactai\\reports\\037e8e75-0260-4c98-abd0-ae2045c777a2_report.pdf",
+    "report_data": {
+      "meta": {
+        "fit_score": 2.0,
+        "fit_label": "Poor",
+        "potential_score": 3.5,
+        "summary": "The conversation is incomplete with only three user turns, limiting the maximum achievable score. The assistant fails to directly address the customer's core concern about the price increase, instead providing vague and confusing information about new features and free trials. This approach frustrates the customer further and does not demonstrate empathy or effective conflict resolution. The dialogue lacks clarity, coherence, and a professional tone needed for a sensitive sales negotiation involving a price hike."
+      },
+      "sidebar_data": {
+        "top_traits": [
+          "Persistence",
+          "Attempted Engagement",
+          "Politeness"
+        ],
+        "improvements": [
+          "Directly Address Customer Concerns",
+          "Clarify Communication",
+          "Empathy and Validation"
+        ],
+        "motivators": [
+          "Customer Retention",
+          "Clear Communication"
+        ],
+        "derailers": [
+          "Canned Responses",
+          "Avoidance of Core Issues"
+        ]
+      },
+      "functional_cards": [
+        {
+          "name": "Conflict Resolution",
+          "score": 2.5,
+          "text": "The assistant fails to acknowledge the customer's frustration or provide a clear rationale for the price increase, which is critical in managing resistance in sales conversations."
+        }
+      ],
+      "behavioral_cards": [
+        {
+          "name": "Empathy",
+          "score": 2.0,
+          "text": "The assistant does not demonstrate understanding or validation of the customer's loyalty or feelings, leading to increased tension."
+        }
+      ],
+      "chatberry_analysis": {
+        "analysis_text": "The assistant's language is somewhat polite but lacks clarity and coherence. Vocabulary is basic and at times confusing, especially when referencing 'learning new planes' which is unclear. Grammar is generally correct but the discourse markers and transitions are weak, making the conversation feel disjointed and evasive. The register is somewhat informal and not sufficiently professional for a sensitive sales negotiation. Content is vague and does not address the customer's core concern about the price increase.",
+        "metrics": [
+          {
+            "label": "Vocabulary",
+            "score": 4.0
+          },
+          {
+            "label": "Grammar",
+            "score": 6.0
+          },
+          {
+            "label": "Coherence",
+            "score": 3.5
+          },
+          {
+            "label": "Discourse Markers",
+            "score": 3.0
+          },
+          {
+            "label": "Accuracy",
+            "score": 4.0
+          },
+          {
+            "label": "Register",
+            "score": 4.0
+          },
+          {
+            "label": "Content",
+            "score": 3.0
+          }
+        ]
+      },
+      "coach_rewrite_card": {
+        "title": "Instant Fix",
+        "context": "Customer is upset about a price increase and demands a clear explanation.",
+        "original_user_response": "So it's a new feature where you can learn New planes and discover a lot of times We will ensure that you will get three months free subscription after that you can decide what to do",
+        "pro_rewrite": "I completely understand your frustration about the price increase after being a loyal customer for so long. The reason for the change is that our legacy plan is being retired to allow us to invest in improved service quality and new features that benefit all customers. While this means a price adjustment to $60 per month, we are offering you a three-month free trial on the new plan so you can experience the benefits risk-free before deciding.",
+        "why_it_works": "This rewrite acknowledges the customer's feelings, provides a clear and honest explanation for the price increase, and offers a tangible benefit (free trial) to ease the transition, which helps build trust and reduce resistance."
+      },
+      "learning_plan": {
+        "priority_focus": "Develop skills in empathetic communication and direct conflict resolution in sales scenarios involving price increases.",
+        "recommended_drill": "Role-play exercises focusing on responding to customer objections about price hikes with clear explanations and empathy.",
+        "suggested_reading": "Books and articles on customer retention strategies and effective communication in sales, such as 'Never Split the Difference' by Chris Voss."
+      },
+      "qa_analysis": [
+        {
+          "question": "Why should I pay more for this new plan after being loyal for years?",
+          "answer": "So it's a new feature where you can learn New planes and discover a lot of times We will ensure that you will get three months free subscription after that you can decide what to do",
+          "feedback": "Not Answered",
+          "score": 0
+        }
+      ],
+      "strategic_advice": {
+        "conflict_diagnosis": "The customer exhibits high resistance to change due to perceived lack of value and betrayal of loyalty, making them hostile to price increases without clear justification.",
+        "step_by_step": [
+          "Step 1: Validate the customer's loyalty and feelings to build rapport.",
+          "Step 2: Clearly explain the reasons behind the price increase, focusing on benefits and improvements.",
+          "Step 3: Offer tangible concessions or trial periods to reduce perceived risk and encourage acceptance.",
+          "Step 4: Listen actively and address any further concerns directly and respectfully.",
+          "Step 5: Close by reaffirming commitment to customer satisfaction and support."
+        ],
+        "power_phrase": "I truly value your loyalty, and I want to make sure you feel confident that this change brings you real benefits."
+      }
+    }
+  },
+  "8f18df8c-bbbc-478d-9449-d78f37f0a8fd": {
+    "id": "8f18df8c-bbbc-478d-9449-d78f37f0a8fd",
+    "created_at": "2025-12-28 17:37:18.841079",
+    "role": "Sales Rep",
+    "ai_role": "Stubborn Customer who has been on a cheap legacy plan for years. They refuse to pay more, don't care about new features, and feel the company is betraying loyalty.",
+    "scenario": "You are calling a loyal customer to inform them their $45/month legacy plan is being retired. They must move to a new $60/month plan. The customer is happy with what they have and will resist any price increase aggressively.",
+    "framework": [
+      "GROW",
+      "STAR",
+      "ADKAR",
+      "SMART"
+    ],
+    "framework_counts": {
+      "GROW": 1
+    },
+    "transcript": [
+      {
+        "role": "assistant",
+        "content": "What\u2019s this I hear about you raising my bill from $45 to $60? I\u2019ve been a loyal customer for years, sticking with this plan because it works just fine. I don\u2019t want your fancy new features or whatever\u2014just keep my price the same. Why are you trying to gouge me now?"
+      },
+      {
+        "role": "user",
+        "content": "I am working"
+      },
+      {
+        "role": "assistant",
+        "content": "[THOUGHT] The user is ignoring my complaint and just repeating \"I am working.\" This feels dismissive and disrespectful. I need to escalate my frustration to get their attention and make it clear I'm not just some background noise. [/THOUGHT]\n\nLook, I don't care if you're \"working\" or not. You're not listening to me! I've been on this plan for years, and now you just want to jack up my bill with no good reason? That\u2019s not how you treat loyal customers. If you can't take this seriously, maybe I should take my business elsewhere!"
+      }
+    ],
+    "completed": false,
+    "relevance_issues": 0
+  },
+  "bf601b34-fbfe-41b4-a543-7c39e5e490db": {
+    "id": "bf601b34-fbfe-41b4-a543-7c39e5e490db",
+    "created_at": "2025-12-28 17:38:40.090564",
+    "role": "HR Manager",
+    "ai_role": "'Mike', a talented remote developer. He is a night owl, productive, but fiercely protective of his flexible schedule and autonomy.",
+    "scenario": "You are introducing a new company policy requiring all remote workers to be logged in between 10 AM and 3 PM. Mike works best late at night and will argue that this arbitrary rule will hurt his productivity.",
+    "framework": [
+      "GROW",
+      "STAR",
+      "ADKAR",
+      "SMART"
+    ],
+    "framework_counts": {},
+    "transcript": [
+      {
+        "role": "assistant",
+        "content": "Look, I get why you want everyone logged in from 10 AM to 3 PM, but this new policy is a nightmare for me. I do my best work late at night when I\u2019m actually focused and not distracted by daytime chaos. Forcing me to be online during those hours is just going to kill my productivity. What\u2019s the point of being remote if you\u2019re just going to micromanage my schedule like I\u2019m in some cubicle?"
+      }
+    ],
+    "completed": true,
+    "relevance_issues": 0,
+    "report_file": "C:\\Users\\suyas\\OneDrive\\Desktop\\coactai\\reports\\bf601b34-fbfe-41b4-a543-7c39e5e490db_report.pdf",
+    "report_data": {
+      "meta": {
+        "fit_score": 0.0,
+        "fit_label": "No Participation",
+        "potential_score": 0.0,
+        "summary": "The user did not participate in the session."
+      },
+      "sidebar_data": {
+        "top_traits": [],
+        "improvements": [
+          "Participation"
+        ],
+        "motivators": [],
+        "derailers": [
+          "Non-participation"
+        ]
+      },
+      "functional_cards": [],
+      "behavioral_cards": [],
+      "chatberry_analysis": {},
+      "coach_rewrite_card": {},
+      "learning_plan": {},
+      "qa_analysis": [],
+      "strategic_advice": {}
+    }
+  },
+  "7d5bd2ea-bb5f-449a-b8e4-af42ea173a2b": {
+    "id": "7d5bd2ea-bb5f-449a-b8e4-af42ea173a2b",
+    "created_at": "2025-12-28 17:51:53.926360",
+    "role": "Sales Rep",
+    "ai_role": "Stubborn Customer who has been on a cheap legacy plan for years. They refuse to pay more, don't care about new features, and feel the company is betraying loyalty.",
+    "scenario": "You are calling a loyal customer to inform them their $45/month legacy plan is being retired. They must move to a new $60/month plan. The customer is happy with what they have and will resist any price increase aggressively.",
+    "framework": [
+      "GROW",
+      "STAR",
+      "ADKAR",
+      "SMART"
+    ],
+    "framework_counts": {},
+    "transcript": [
+      {
+        "role": "assistant",
+        "content": "Wait, hold on a second. I just got this notice that my $45 plan is being retired and now I have to pay $60? After all these years of loyalty? That\u2019s ridiculous. I don\u2019t want any new features or fancy stuff. I just want to keep my plan at the price I\u2019ve been paying. Why should I have to pay more now?"
+      }
+    ],
+    "completed": false,
+    "relevance_issues": 0
+  }
+}
