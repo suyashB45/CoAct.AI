@@ -7,14 +7,40 @@ import { useNavigate } from 'react-router-dom';
 const HeroSection = () => {
     const navigate = useNavigate();
 
+    // Generate random particles
+    const particles = Array.from({ length: 20 }, (_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        delay: `${Math.random() * 5}s`,
+        size: 3 + Math.random() * 4,
+    }));
+
     return (
         <section className="hero-ultra-modern section-lg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', paddingTop: '2rem' }}>
+
+            {/* Floating Particles */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {particles.map((p) => (
+                    <div
+                        key={p.id}
+                        className="particle"
+                        style={{
+                            left: p.left,
+                            top: p.top,
+                            width: `${p.size}px`,
+                            height: `${p.size}px`,
+                            animationDelay: p.delay,
+                        }}
+                    />
+                ))}
+            </div>
 
             {/* Animated Background Elements */}
             <div className="absolute inset-0 overflow-hidden">
                 <motion.div
-                    className="absolute"
-                    style={{ top: '5rem', left: '2.5rem', width: '18rem', height: '18rem', background: 'rgba(139, 92, 246, 0.15)', borderRadius: '9999px', filter: 'blur(60px)' }}
+                    className="absolute morph-blob"
+                    style={{ top: '5rem', left: '2.5rem', width: '18rem', height: '18rem', background: 'rgba(139, 92, 246, 0.15)', filter: 'blur(60px)' }}
                     animate={{
                         x: [0, 100, 0],
                         y: [0, -50, 0],
@@ -26,8 +52,8 @@ const HeroSection = () => {
                     }}
                 />
                 <motion.div
-                    className="absolute"
-                    style={{ top: '10rem', right: '5rem', width: '22rem', height: '22rem', background: 'rgba(236, 72, 153, 0.15)', borderRadius: '9999px', filter: 'blur(70px)' }}
+                    className="absolute morph-blob"
+                    style={{ top: '10rem', right: '5rem', width: '22rem', height: '22rem', background: 'rgba(236, 72, 153, 0.15)', filter: 'blur(70px)' }}
                     animate={{
                         x: [0, -80, 0],
                         y: [0, 60, 0],
@@ -39,8 +65,8 @@ const HeroSection = () => {
                     }}
                 />
                 <motion.div
-                    className="absolute"
-                    style={{ bottom: '5rem', left: '25%', width: '16rem', height: '16rem', background: 'rgba(59, 130, 246, 0.12)', borderRadius: '9999px', filter: 'blur(50px)' }}
+                    className="absolute morph-blob"
+                    style={{ bottom: '5rem', left: '25%', width: '16rem', height: '16rem', background: 'rgba(59, 130, 246, 0.12)', filter: 'blur(50px)' }}
                     animate={{
                         x: [0, 60, 0],
                         y: [0, -40, 0],
@@ -64,7 +90,7 @@ const HeroSection = () => {
                     >
                         {/* Badge */}
                         <motion.div
-                            className="inline-flex items-center gap-2 px-4 py-2 btn-glass mb-6"
+                            className="inline-flex items-center gap-2 px-4 py-2 btn-glass mb-6 animate-pulse-glow"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
@@ -81,7 +107,7 @@ const HeroSection = () => {
                             transition={{ delay: 0.3 }}
                         >
                             <span className="text-white block">Transform Your</span>
-                            <span className="text-ultra-gradient block text-glow">Life with AI</span>
+                            <span className="block text-gradient-animate text-glow">Life with AI</span>
                         </motion.h1>
 
                         {/* Subheadline */}

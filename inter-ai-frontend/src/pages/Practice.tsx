@@ -15,6 +15,7 @@ import {
     Briefcase as BriefcaseIcon
 } from "lucide-react"
 import Navigation from "../components/landing/Navigation"
+import { startSession } from "../lib/api"
 
 // Organized by category with real-world scenarios
 const SCENARIO_CATEGORIES = [
@@ -88,43 +89,39 @@ export default function Practice() {
     }) => {
         setLoading(true)
         try {
-            const response = await fetch("/session/start", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+            // Call the backend API to start a session
+            const response = await startSession({
+                role: data.role,
+                ai_role: data.ai_role,
+                scenario: data.scenario,
+                framework: ["GROW", "STAR", "ADKAR", "SMART", "EQ"]
             })
 
-            // ... (imports remain)
-
-            // ... inside Practice component
-
-            if (!response.ok) {
-                const errorText = await response.text()
-                throw new Error(`Failed to start session: ${response.status} - ${errorText}`)
-            }
-
-            const sessionData = await response.json()
-            const { session_id, summary } = sessionData
-
+            // Store session data in localStorage for quick access
             localStorage.setItem(
-                `session_${session_id}`,
+                `session_${response.session_id}`,
                 JSON.stringify({
                     role: data.role,
                     ai_role: data.ai_role,
                     scenario: data.scenario,
                     createdAt: new Date().toISOString(),
-                    transcript: [{ role: "assistant", content: summary }],
-                    sessionId: session_id
+                    transcript: [{ role: "assistant", content: response.summary }],
+                    sessionId: response.session_id,
+                    completed: false
                 }),
             )
 
-            navigate(`/conversation/${session_id}`)
+            toast.success("Session Started", {
+                description: "Connected to AI roleplay partner"
+            })
+
+            navigate(`/conversation/${response.session_id}`)
 
         } catch (error) {
             console.error("Error starting session:", error)
 
             toast.error("Failed to start session", {
-                description: "Please ensure the backend is running and try again."
+                description: error instanceof Error ? error.message : "Please check if the backend is running."
             })
         } finally {
             setLoading(false)
@@ -133,17 +130,114 @@ export default function Practice() {
 
     const currentCategory = SCENARIO_CATEGORIES[activeCategory]
 
+    // Generate floating particles for background
+    const particles = Array.from({ length: 15 }, (_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        delay: Math.random() * 5,
+        size: 2 + Math.random() * 3,
+    }))
+
     return (
-        <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-purple-500/30">
+        <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-purple-500/30 overflow-hidden">
             <Navigation />
 
-            {/* Background */}
-            <div className="fixed inset-0 pointer-events-none -z-10">
-                <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-600/10 rounded-full blur-[120px]" />
-                <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full blur-[120px]" />
+            {/* Animated Background - Purple/Indigo Theme */}
+            <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
+                {/* Floating Particles */}
+                {particles.map((p) => (
+                    <motion.div
+                        key={p.id}
+                        className="absolute rounded-full bg-purple-400/30"
+                        style={{
+                            left: p.left,
+                            top: p.top,
+                            width: `${p.size}px`,
+                            height: `${p.size}px`,
+                        }}
+                        animate={{
+                            y: [0, -30, 0],
+                            opacity: [0.3, 0.8, 0.3],
+                        }}
+                        transition={{
+                            duration: 4 + Math.random() * 2,
+                            repeat: Infinity,
+                            delay: p.delay,
+                            ease: "easeInOut"
+                        }}
+                    />
+                ))}
+
+                {/* Morphing Blobs */}
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        top: '-10%',
+                        left: '-5%',
+                        width: '40rem',
+                        height: '40rem',
+                        background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)',
+                        filter: 'blur(60px)'
+                    }}
+                    animate={{
+                        x: [0, 50, 0],
+                        y: [0, 30, 0],
+                        scale: [1, 1.1, 1],
+                    }}
+                    transition={{
+                        duration: 20,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        top: '30%',
+                        right: '-10%',
+                        width: '35rem',
+                        height: '35rem',
+                        background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)',
+                        filter: 'blur(70px)'
+                    }}
+                    animate={{
+                        x: [0, -40, 0],
+                        y: [0, 50, 0],
+                        scale: [1, 0.95, 1],
+                    }}
+                    transition={{
+                        duration: 25,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        bottom: '-15%',
+                        left: '30%',
+                        width: '30rem',
+                        height: '30rem',
+                        background: 'radial-gradient(circle, rgba(168,85,247,0.1) 0%, transparent 70%)',
+                        filter: 'blur(50px)'
+                    }}
+                    animate={{
+                        x: [0, 60, 0],
+                        y: [0, -20, 0],
+                    }}
+                    transition={{
+                        duration: 18,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+
+                {/* Subtle grid overlay */}
+                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMDMpIiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-50" />
             </div>
 
-            <main className="container mx-auto px-6 pt-32 pb-12">
+            <main className="container mx-auto px-6 pt-32 pb-12 relative z-10">
                 {/* Hero Section */}
                 <motion.div
                     initial={{ opacity: 0, y: 30 }}
@@ -155,14 +249,14 @@ export default function Practice() {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.2 }}
-                        className="inline-flex items-center gap-2 mb-6 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-blue-300 backdrop-blur-md"
+                        className="inline-flex items-center gap-2 mb-6 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-purple-300 backdrop-blur-md"
                     >
                         <Sparkles className="w-4 h-4 animate-pulse" />
                         <span>Interactive Roleplay Studio</span>
                     </motion.div>
 
                     <h1 className="text-4xl md:text-6xl font-black mb-6 tracking-tight text-white leading-[1.1]">
-                        Practice with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Purpose</span>
+                        Practice with <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400">Purpose</span>
                     </h1>
 
                     <p className="text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
@@ -209,14 +303,17 @@ export default function Practice() {
                                         initial={{ opacity: 0, y: 30 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: idx * 0.1 }}
-                                        whileHover={{ y: -8 }}
-                                        className="card-ultra-glass group p-8 flex flex-col h-full relative overflow-hidden"
+                                        whileHover={{ y: -8, rotateX: 2, rotateY: -2 }}
+                                        className="card-ultra-glass card-3d-tilt group p-8 flex flex-col h-full relative overflow-hidden"
+                                        style={{ transformStyle: 'preserve-3d' }}
                                     >
-                                        <div className={`absolute top-0 right-0 w-64 h-64 bg-gradient-to-br ${currentCategory.color} opacity-0 group-hover:opacity-10 blur-[80px] transition-all duration-700 rounded-full -translate-y-1/2 translate-x-1/2`} />
+                                        {/* Animated gradient orb on hover */}
+                                        <div className={`absolute top-0 right-0 w-80 h-80 bg-gradient-to-br ${currentCategory.color} opacity-0 group-hover:opacity-15 blur-[100px] transition-all duration-700 rounded-full -translate-y-1/2 translate-x-1/2`} />
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
 
                                         <div className="flex items-start gap-4 mb-6 relative z-10">
-                                            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentCategory.color} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                                                <scenario.icon className="w-7 h-7" />
+                                            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentCategory.color} flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                                                <scenario.icon className="w-7 h-7 group-hover:animate-pulse" />
                                             </div>
                                             <div>
                                                 <h3 className="text-2xl font-bold text-white mb-2">{scenario.title}</h3>
@@ -246,7 +343,7 @@ export default function Practice() {
                                                 scenario: scenario.scenario,
                                             })}
                                             disabled={loading}
-                                            className="w-full btn-ultra-modern py-4 flex items-center justify-center gap-2 mt-auto relative z-10"
+                                            className="w-full btn-ultra-modern btn-press py-4 flex items-center justify-center gap-2 mt-auto relative z-10 group/btn"
                                         >
                                             {loading ? (
                                                 <Loader2 className="h-5 w-5 animate-spin" />

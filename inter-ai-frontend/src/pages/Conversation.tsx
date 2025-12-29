@@ -4,8 +4,9 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Mic, Square, ArrowLeft, Clock, User, Bot, Send, Sparkles, Volume2, History, X } from "lucide-react"
+import { Mic, Square, ArrowLeft, Clock, User, Bot, Send, Sparkles, History, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { sendChatMessage, completeSession } from "../lib/api"
 
 interface TranscriptMessage {
     role: "user" | "assistant"
@@ -81,48 +82,37 @@ export default function Conversation() {
             audioRef.current.pause()
             audioRef.current = null
         }
-        window.speechSynthesis.cancel() // Safety clear
+        window.speechSynthesis.cancel()
 
         try {
             setIsAiSpeaking(true)
 
-            // Remove "internal thoughts" or other artifacts if any slipped through, 
-            // though the backend should handle this. 
-            // Also, we can send a style here if we parse emotions from the text!
-            // For now, simpler is better.
+            // Use browser's built-in text-to-speech (no backend needed)
+            const speech = new SpeechSynthesisUtterance(text)
+            speech.rate = 1.0
+            speech.pitch = 1.0
+            speech.volume = 1.0
 
-            const response = await fetch("/api/tts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text }),
-            })
-
-            if (!response.ok) throw new Error("TTS Failed")
-
-            const blob = await response.blob()
-            const url = URL.createObjectURL(blob)
-            const audio = new Audio(url)
-
-            audioRef.current = audio
-            audio.onended = () => {
-                setIsAiSpeaking(false)
-                URL.revokeObjectURL(url)
-                startRecording()
-            }
-            audio.onerror = () => {
-                setIsAiSpeaking(false)
-                // Optional: maintain flow even on error?
-                // startRecording() 
+            // Try to get a good voice
+            const voices = window.speechSynthesis.getVoices()
+            const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google'))
+                || voices.find(v => v.lang.startsWith('en'))
+            if (preferredVoice) {
+                speech.voice = preferredVoice
             }
 
-            await audio.play()
+            speech.onend = () => {
+                setIsAiSpeaking(false)
+            }
+            speech.onerror = () => {
+                setIsAiSpeaking(false)
+            }
+
+            window.speechSynthesis.speak(speech)
 
         } catch (error) {
             console.error("TTS Playback Error:", error)
             setIsAiSpeaking(false)
-            // Fallback to browser if server fails?
-            // const speech = new SpeechSynthesisUtterance(text)
-            // window.speechSynthesis.speak(speech) 
         }
     }
 
@@ -225,22 +215,11 @@ export default function Conversation() {
                 recognition.start()
 
             } else {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-                mediaRecorderRef.current = new MediaRecorder(stream)
-
-                mediaRecorderRef.current.onstop = () => {
-                    const mockTranscripts = [
-                        "I want to focus on salary negotiation strategies.",
-                        "I feel I deserve a raise based on my recent performance.",
-                        "My target is a 15% increase effectively immediately.",
-                    ]
-                    const userMessage = mockTranscripts[Math.floor(Math.random() * mockTranscripts.length)]
-                    stream.getTracks().forEach((track) => track.stop())
-                    setState(prev => ({ ...prev, currentDraft: prev.currentDraft + " " + userMessage }))
-                }
-
-                mediaRecorderRef.current.start()
-                setState(prev => ({ ...prev, isRecording: true }))
+                // Fallback: Just use the browser's SpeechRecognition API
+                // If browser doesn't support it, show a message
+                toast.info("Speech Recognition", {
+                    description: "Please type your message instead - your browser doesn't support continuous speech recognition."
+                })
             }
         } catch (error) {
             console.error("Error accessing microphone:", error)
@@ -264,16 +243,10 @@ export default function Conversation() {
         }))
 
         try {
-            const response = await fetch(`/api/session/${sessionId}/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message }),
-            })
+            // Call the backend API to get AI response
+            const response = await sendChatMessage(sessionId, message)
 
-            if (!response.ok) throw new Error("API request failed")
-
-            const data = await response.json()
-            const aiResponse = data.follow_up
+            const aiResponse = response.follow_up
 
             setState((prev) => ({
                 ...prev,
@@ -300,7 +273,7 @@ export default function Conversation() {
             setState((prev) => ({ ...prev, isProcessing: false }))
 
             toast.error("Connection Error", {
-                description: "Failed to get response from AI Coach. Is the server running?"
+                description: error instanceof Error ? error.message : "Failed to communicate with AI. Please check if the backend is running."
             })
         }
     }
@@ -309,10 +282,22 @@ export default function Conversation() {
         if ("speechSynthesis" in window) {
             window.speechSynthesis.cancel()
         }
+
         try {
-            await fetch(`/api/session/${sessionId}/complete`, { method: "POST" })
-        } catch (e) {
-            console.error("Error completing session", e)
+            // Mark session as completed on the backend (generates report)
+            await completeSession(sessionId)
+        } catch (error) {
+            console.error("Error completing session:", error)
+            // Continue to report page even if completion fails - we'll generate mock data
+        }
+
+        // Mark session as completed in localStorage
+        if (state.sessionData) {
+            const updated = {
+                ...state.sessionData,
+                completed: true
+            }
+            localStorage.setItem(`session_${sessionId}`, JSON.stringify(updated))
         }
         navigate(`/report/${sessionId}`)
     }
@@ -322,11 +307,99 @@ export default function Conversation() {
 
     return (
         <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden flex flex-col font-sans">
-            {/* Animated Background */}
-            <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute top-[20%] left-[20%] w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse duration-[10s]" />
-                <div className="absolute bottom-[20%] right-[20%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] animate-pulse duration-[8s]" />
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150 mix-blend-overlay"></div>
+            {/* Animated Background - Blue/Cyan Theme (Voice/Communication) */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                {/* Morphing Blobs */}
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        top: '10%',
+                        left: '15%',
+                        width: '35rem',
+                        height: '35rem',
+                        background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)',
+                        filter: 'blur(60px)'
+                    }}
+                    animate={{
+                        x: [0, 30, 0],
+                        y: [0, -20, 0],
+                        scale: [1, 1.1, 1],
+                    }}
+                    transition={{
+                        duration: 12,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        bottom: '15%',
+                        right: '10%',
+                        width: '40rem',
+                        height: '40rem',
+                        background: 'radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%)',
+                        filter: 'blur(70px)'
+                    }}
+                    animate={{
+                        x: [0, -40, 0],
+                        y: [0, 30, 0],
+                        scale: [1, 0.95, 1],
+                    }}
+                    transition={{
+                        duration: 15,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: '25rem',
+                        height: '25rem',
+                        background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
+                        filter: 'blur(50px)'
+                    }}
+                    animate={{
+                        scale: [1, 1.15, 1],
+                        opacity: [0.5, 0.8, 0.5],
+                    }}
+                    transition={{
+                        duration: 8,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+
+                {/* Sound wave inspired particles */}
+                {[...Array(10)].map((_, i) => (
+                    <motion.div
+                        key={i}
+                        className="absolute rounded-full bg-cyan-400/20"
+                        style={{
+                            left: `${45 + (i - 5) * 3}%`,
+                            top: '50%',
+                            width: '4px',
+                            height: '4px',
+                        }}
+                        animate={{
+                            y: [0, -30 - i * 5, 0, 30 + i * 5, 0],
+                            opacity: [0.2, 0.6, 0.2],
+                        }}
+                        transition={{
+                            duration: 2 + i * 0.2,
+                            repeat: Infinity,
+                            delay: i * 0.1,
+                            ease: "easeInOut"
+                        }}
+                    />
+                ))}
+
+                {/* Noise texture overlay */}
+                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=')] opacity-30" />
             </div>
 
             {/* Header */}
@@ -375,52 +448,119 @@ export default function Conversation() {
 
                 {/* The Sphere Container */}
                 <div className="relative mb-16 group">
-                    {/* Ring 1 - Outer Pulse */}
+                    {/* Morphing Background Blob */}
+                    <div className={`absolute -inset-12 morph-blob blur-3xl transition-all duration-1000 ${state.isRecording
+                        ? 'bg-red-500/20'
+                        : isAiSpeaking
+                            ? 'bg-blue-500/25'
+                            : 'bg-indigo-500/10'
+                        }`} />
+
+                    {/* Ring Pulse Effect - Multiple Rings */}
+                    {(state.isRecording || isAiSpeaking) && (
+                        <>
+                            <div className={`absolute -inset-4 rounded-full border-2 animate-ring-pulse ${state.isRecording ? 'border-red-500/40' : 'border-blue-500/40'
+                                }`} />
+                            <div className={`absolute -inset-4 rounded-full border-2 animate-ring-pulse ${state.isRecording ? 'border-red-500/40' : 'border-blue-500/40'
+                                }`} style={{ animationDelay: '0.5s' }} />
+                            <div className={`absolute -inset-4 rounded-full border-2 animate-ring-pulse ${state.isRecording ? 'border-red-500/40' : 'border-blue-500/40'
+                                }`} style={{ animationDelay: '1s' }} />
+                        </>
+                    )}
+
+                    {/* Outer Glow Ring */}
                     <motion.div
                         animate={{
-                            scale: isAiSpeaking ? [1, 1.4, 1] : state.isProcessing ? [1, 1.1, 1] : 1,
-                            opacity: isAiSpeaking ? [0.1, 0.2, 0.1] : 0.05
+                            scale: isAiSpeaking ? [1, 1.3, 1] : state.isProcessing ? [1, 1.1, 1] : 1,
+                            opacity: isAiSpeaking ? [0.15, 0.3, 0.15] : state.isRecording ? 0.2 : 0.08
                         }}
-                        transition={{ duration: isAiSpeaking ? 2 : 3, repeat: Infinity, ease: "easeInOut" }}
-                        className={`absolute inset-0 rounded-full blur-2xl transition-colors duration-1000 ${state.isRecording ? 'bg-red-500/30' : 'bg-blue-500/20'}`}
+                        transition={{ duration: isAiSpeaking ? 1.5 : 3, repeat: Infinity, ease: "easeInOut" }}
+                        className={`absolute -inset-8 rounded-full blur-2xl transition-colors duration-700 ${state.isRecording
+                            ? 'bg-gradient-to-br from-red-500/40 to-rose-600/30'
+                            : isAiSpeaking
+                                ? 'bg-gradient-to-br from-blue-500/30 to-purple-500/30'
+                                : 'bg-blue-500/15'
+                            }`}
                     />
 
-                    {/* Ring 2 - Inner Pulse */}
+                    {/* Inner Border Ring */}
                     <motion.div
                         animate={{
-                            scale: isAiSpeaking ? [1, 1.15, 1] : 1,
-                            borderColor: state.isRecording ? "rgba(239, 68, 68, 0.4)" : "rgba(59, 130, 246, 0.2)"
+                            scale: isAiSpeaking ? [1, 1.08, 1] : 1,
+                            rotate: state.isProcessing ? 360 : 0
                         }}
-                        transition={{ duration: 0.5 }}
-                        className="absolute -inset-6 border border-white/5 rounded-full backdrop-blur-[1px]"
+                        transition={{
+                            scale: { duration: 1.5, repeat: Infinity, ease: "easeInOut" },
+                            rotate: { duration: 8, repeat: Infinity, ease: "linear" }
+                        }}
+                        className={`absolute -inset-5 rounded-full border transition-colors duration-500 ${state.isRecording
+                            ? 'border-red-500/30'
+                            : state.isProcessing
+                                ? 'border-dashed border-blue-500/40'
+                                : 'border-white/10'
+                            }`}
                     />
 
                     {/* Core Sphere */}
                     <motion.div
                         animate={{
-                            scale: isAiSpeaking ? [1, 1.05, 1] : 1,
-                            background: state.isRecording
-                                ? "linear-gradient(135deg, #ef4444 0%, #7f1d1d 100%)"
-                                : isAiSpeaking
-                                    ? "linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)"
-                                    : "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
+                            scale: isAiSpeaking ? [1, 1.04, 1] : state.isRecording ? [1, 1.02, 1] : 1,
                         }}
-                        className={`w-48 h-48 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center relative overflow-hidden transition-all duration-500 border border-white/10`}
+                        transition={{ duration: isAiSpeaking ? 0.8 : 2, repeat: Infinity, ease: "easeInOut" }}
+                        className={`w-52 h-52 rounded-full shadow-2xl flex items-center justify-center relative overflow-hidden transition-all duration-700 border border-white/10 ${!state.isRecording && !isAiSpeaking && !state.isProcessing ? 'animate-breathe' : ''
+                            }`}
+                        style={{
+                            background: state.isRecording
+                                ? "linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%)"
+                                : isAiSpeaking
+                                    ? "linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%)"
+                                    : state.isProcessing
+                                        ? "linear-gradient(135deg, #1e3a8a 0%, #312e81 50%, #1e1b4b 100%)"
+                                        : "linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #020617 100%)"
+                        }}
                     >
                         {/* Internal Shine/Reflection */}
-                        <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-white/20 via-transparent to-transparent rounded-full" />
-                        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/40 to-transparent rounded-full" />
+                        <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-white/25 via-transparent to-transparent rounded-full" />
+                        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/50 to-transparent rounded-full" />
 
-                        {/* Icon */}
-                        <div className="relative z-10 transition-transform duration-300">
+                        {/* Subtle Inner Glow */}
+                        <div className={`absolute inset-4 rounded-full blur-xl transition-opacity duration-500 ${isAiSpeaking ? 'bg-blue-400/20 opacity-100' : state.isRecording ? 'bg-red-400/20 opacity-100' : 'opacity-0'
+                            }`} />
+
+                        {/* Content: Icon or Audio Visualizer */}
+                        <div className="relative z-10 transition-transform duration-300 flex items-center justify-center">
                             {state.isRecording ? (
-                                <Mic className="w-16 h-16 text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
+                                /* Audio Visualizer Bars while Recording */
+                                <div className="flex items-end justify-center gap-1 h-16">
+                                    {[...Array(9)].map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className="audio-bar w-1.5 rounded-full"
+                                            style={{
+                                                height: `${30 + Math.random() * 40}%`,
+                                                background: 'linear-gradient(180deg, #fff 0%, #fca5a5 100%)',
+                                                animationDelay: `${i * 0.1}s`
+                                            }}
+                                        />
+                                    ))}
+                                </div>
                             ) : isAiSpeaking ? (
-                                <Volume2 className="w-16 h-16 text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)] animate-pulse" />
+                                /* Audio Visualizer for AI Speaking */
+                                <div className="flex items-end justify-center gap-1 h-16">
+                                    {[...Array(9)].map((_, i) => (
+                                        <div
+                                            key={i}
+                                            className="audio-bar w-1.5 rounded-full"
+                                            style={{
+                                                animationDelay: `${i * 0.1}s`
+                                            }}
+                                        />
+                                    ))}
+                                </div>
                             ) : state.isProcessing ? (
                                 <Sparkles className="w-16 h-16 text-blue-200 drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)] animate-spin-slow" />
                             ) : (
-                                <Bot className="w-16 h-16 text-slate-400 drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
+                                <Bot className="w-16 h-16 text-slate-400 drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)] group-hover:text-slate-300 transition-colors" />
                             )}
                         </div>
                     </motion.div>

@@ -6,16 +6,7 @@ import { Clock, User, Bot, CheckCircle2, PlayCircle, Calendar, Trophy } from "lu
 import { motion } from "framer-motion"
 
 import Navigation from "../components/landing/Navigation"
-
-interface SessionItem {
-    id: string
-    created_at: string
-    role: string
-    ai_role: string
-    scenario: string
-    completed: boolean
-    fit_score: number
-}
+import { getSessions, SessionItem } from "../lib/api"
 
 export default function SessionHistory() {
     const navigate = useNavigate()
@@ -24,16 +15,48 @@ export default function SessionHistory() {
     const [filter, setFilter] = useState<'all' | 'completed' | 'ongoing'>('all')
 
     useEffect(() => {
-        fetch("/api/sessions")
-            .then(res => res.json())
-            .then(data => {
-                setSessions(data)
+        // Load sessions from backend API (with localStorage fallback)
+        const loadSessions = async () => {
+            try {
+                // Try to fetch from backend first
+                const backendSessions = await getSessions()
+                setSessions(backendSessions)
+            } catch (err) {
+                console.error("Failed to load sessions from backend, falling back to localStorage", err)
+
+                // Fallback to localStorage
+                const allSessions: SessionItem[] = []
+
+                // Scan localStorage for session data
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i)
+                    if (key && key.startsWith('session_session_')) {
+                        const data = localStorage.getItem(key)
+                        if (data) {
+                            const session = JSON.parse(data)
+                            allSessions.push({
+                                id: session.sessionId || key.replace('session_', ''),
+                                created_at: session.createdAt || new Date().toISOString(),
+                                role: session.role || 'Unknown Role',
+                                ai_role: session.ai_role || 'AI Coach',
+                                scenario: session.scenario || 'Practice Session',
+                                completed: session.completed || false,
+                                fit_score: session.fit_score || 0
+                            })
+                        }
+                    }
+                }
+
+                // Sort by date (newest first)
+                allSessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+                setSessions(allSessions)
+            } finally {
                 setLoading(false)
-            })
-            .catch(err => {
-                console.error("Failed to load sessions", err)
-                setLoading(false)
-            })
+            }
+        }
+
+        loadSessions()
     }, [])
 
     const formatDate = (dateString: string) => {
@@ -53,16 +76,102 @@ export default function SessionHistory() {
     })
 
     return (
-        <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-purple-500/30">
+        <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-amber-500/30 overflow-hidden">
             <Navigation />
 
-            {/* Background */}
-            <div className="fixed inset-0 pointer-events-none -z-10">
-                <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px]" />
-                <div className="absolute bottom-[-20%] left-[-10%] w-[400px] h-[400px] bg-purple-600/10 rounded-full blur-[120px]" />
+            {/* Animated Background - Amber/Orange Theme */}
+            <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
+                {/* Morphing Blobs */}
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        top: '-15%',
+                        right: '10%',
+                        width: '35rem',
+                        height: '35rem',
+                        background: 'radial-gradient(circle, rgba(251,191,36,0.12) 0%, transparent 70%)',
+                        filter: 'blur(60px)'
+                    }}
+                    animate={{
+                        x: [0, -30, 0],
+                        y: [0, 40, 0],
+                        scale: [1, 1.05, 1],
+                    }}
+                    transition={{
+                        duration: 22,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        bottom: '-10%',
+                        left: '-5%',
+                        width: '40rem',
+                        height: '40rem',
+                        background: 'radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%)',
+                        filter: 'blur(70px)'
+                    }}
+                    animate={{
+                        x: [0, 50, 0],
+                        y: [0, -30, 0],
+                        scale: [1, 0.95, 1],
+                    }}
+                    transition={{
+                        duration: 25,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+                <motion.div
+                    className="absolute rounded-full"
+                    style={{
+                        top: '40%',
+                        left: '50%',
+                        width: '25rem',
+                        height: '25rem',
+                        background: 'radial-gradient(circle, rgba(234,88,12,0.08) 0%, transparent 70%)',
+                        filter: 'blur(50px)'
+                    }}
+                    animate={{
+                        x: [0, -40, 0],
+                        y: [0, 30, 0],
+                    }}
+                    transition={{
+                        duration: 18,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                />
+
+                {/* Floating archive icons effect */}
+                {[...Array(8)].map((_, i) => (
+                    <motion.div
+                        key={i}
+                        className="absolute w-1.5 h-1.5 rounded-full bg-amber-400/20"
+                        style={{
+                            left: `${10 + i * 12}%`,
+                            top: `${20 + (i % 3) * 25}%`,
+                        }}
+                        animate={{
+                            y: [0, -20, 0],
+                            opacity: [0.2, 0.6, 0.2],
+                        }}
+                        transition={{
+                            duration: 3 + i * 0.5,
+                            repeat: Infinity,
+                            delay: i * 0.3,
+                            ease: "easeInOut"
+                        }}
+                    />
+                ))}
+
+                {/* Subtle radial gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/50" />
             </div>
 
-            <main className="container mx-auto px-6 pt-32 pb-12">
+            <main className="container mx-auto px-6 pt-32 pb-12 relative z-10">
                 {/* Controls */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
                     <div>
@@ -75,8 +184,8 @@ export default function SessionHistory() {
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
-                                className={`px-5 py-2 rounded-lg text-sm font-bold capitalize transition-all ${filter === f
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                                className={`px-5 py-2 rounded-lg text-sm font-bold capitalize transition-all duration-300 btn-press ${filter === f
+                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-900/30'
                                     : 'text-slate-400 hover:text-white hover:bg-white/5'
                                     }`}
                             >
@@ -92,13 +201,13 @@ export default function SessionHistory() {
                         <p className="font-medium animate-pulse">Loading history...</p>
                     </div>
                 ) : filteredSessions.length === 0 ? (
-                    <div className="text-center py-24 card-ultra-glass border-dashed">
-                        <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-500 border border-white/5">
+                    <div className="text-center py-24 card-ultra-glass border-dashed group">
+                        <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-500 border border-white/5 group-hover:bg-slate-700/50 transition-colors animate-breathe">
                             <Clock className="w-10 h-10" />
                         </div>
                         <h3 className="text-2xl font-bold text-white mb-2">No Sessions Found</h3>
                         <p className="text-slate-400 mb-8 max-w-md mx-auto">You haven't started any training sessions yet. Launch a new scenario to get started.</p>
-                        <button onClick={() => navigate("/practice")} className="btn-ultra-modern px-8 py-3">
+                        <button onClick={() => navigate("/practice")} className="btn-ultra-modern btn-press px-8 py-3">
                             Start New Session
                         </button>
                     </div>
@@ -110,8 +219,11 @@ export default function SessionHistory() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: idx * 0.05 }}
+                                whileHover={{ y: -4, scale: 1.01 }}
                                 className="group relative card-ultra-glass p-6 md:p-8 flex flex-col md:flex-row gap-8 md:items-center justify-between hover:border-blue-500/30 transition-all duration-300"
                             >
+                                {/* Subtle hover glow */}
+                                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
                                 <div className="flex-1 space-y-4">
                                     <div className="flex items-center gap-3 text-xs font-bold tracking-wider text-slate-500 uppercase">
                                         <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-md">
@@ -159,8 +271,8 @@ export default function SessionHistory() {
 
                                     <button
                                         onClick={() => session.completed ? navigate(`/report/${session.id}`) : navigate(`/conversation/${session.id}`)}
-                                        className={`min-w-[140px] px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${session.completed
-                                            ? 'bg-slate-800 hover:bg-slate-700 text-white border border-white/10'
+                                        className={`min-w-[140px] px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all btn-press ${session.completed
+                                            ? 'bg-slate-800 hover:bg-slate-700 text-white border border-white/10 hover:border-white/20'
                                             : 'btn-ultra-modern'
                                             }`}
                                     >
