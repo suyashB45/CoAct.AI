@@ -1,77 +1,66 @@
 # CoAct AI
 
-This repository contains the source code for CoAct AI, structured as a monorepo with three main services.
+CoAct AI is a monorepo containing the Frontend and Backend for the CoAct AI coaching platform.
 
 ## Project Structure
 
 ```
 /
-├── .github/workflows   # CI/CD pipelines
-├── client/             # React Frontend (formerly inter-ai-frontend)
-├── server/             # Node.js Backend (New orchestration layer)
-├── ai-engine/          # Python AI Service (formerly inter-ai-backend)
-└── docker-compose.yml  # Container orchestration
+├── inter-ai-frontend/     # React Frontend (Vite + TS)
+├── inter-ai-backend/      # Python Backend (Flask/FastAPI + AI)
+└── docker-compose.yml     # Container orchestration
 ```
 
 ## Services
 
-### 1. Client (`/client`)
-- **Tech**: React, Vite, TypeScript
-- **Port**: 3000
-- **Description**: The user interface for the application.
+### 1. Inter AI Frontend (`/inter-ai-frontend`)
+- **Tech Stack**: React, Vite, TypeScript, Tailwind CSS
+- **Port**: 3000 (Local), 80 (Docker)
+- **Description**: The main user interface.
 
-### 2. Server (`/server`)
-- **Tech**: Node.js, Express
-- **Port**: 5000
-- **Description**: The main application backend handling business logic and API orchestration.
-
-### 3. AI Engine (`/ai-engine`)
-- **Tech**: Python, Flask/FastAPI
+### 2. Inter AI Backend (`/inter-ai-backend`)
+- **Tech Stack**: Python, Azure OpenAI
 - **Port**: 8000
-- **Description**: Handles AI-specific tasks like RAG, Speech-to-Text, and Report Generation.
+- **Description**: Handles API requests, session management, and AI interactions.
 
 ## Getting Started
 
 ### Prerequisites
 - Docker & Docker Compose
-- Node.js (for local dev)
-- Python 3.10+ (for local dev)
+- Node.js 20+ (for local frontend dev)
+- Python 3.11+ (for local backend dev)
 
-### Running with Docker
+### Running with Docker (Recommended)
+
+To run the entire stack:
 
 ```bash
 docker-compose up --build
 ```
 
-### Running Locally
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
 
-See individual README files in each directory for specific setup instructions.
+### Running Locally (Manual)
 
-## Deployment Guide (2026 Strategy)
+**Backend:**
+```bash
+cd inter-ai-backend
+python -m venv .venv
+# Activate venv (Windows: .venv\Scripts\activate, Mac/Linux: source .venv/bin/activate)
+pip install -r requirements.txt
+python app.py
+```
 
-This project uses a "Git-Integrated Hosting" strategy with a Monorepo structure.
+**Frontend:**
+```bash
+cd inter-ai-frontend
+npm install
+npm run dev
+```
 
-### 1. GitHub Actions
-A unified CI workflow is defined in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) that tests all three tiers (Client, Server, AI Engine) on every push.
+## Deployment
 
-### 2. Hosting (Render/Railway/Azure)
-Connect your GitHub repo to your hosting provider of choice.
-
-**Configuration for Node Server:**
-- **Root Directory**: `server`
-- **Build Command**: `npm install`
-- **Start Command**: `node index.js`
-- **Environment**: `NODE_ENV=production`, `PORT=5000`, `AI_ENGINE_URL=...`
-
-**Configuration for AI Engine (Python):**
-- **Root Directory**: `ai-engine`
-- **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `python app.py` (or uvicorn/gunicorn if updated)
-- **Environment**: `PORT=8000`, `AZURE_...` keys.
-
-**Configuration for Client:**
-- Host as a Static Site (Vercel/Netlify/Render Static)
-- **Root Directory**: `client`
-- **Build Command**: `npm run build`
-- **Publish Directory**: `dist`
-
+### Configuration
+- **Frontend**: Ensure `VITE_API_URL` environment variable points to your deployed backend URL.
+- **Backend**: Requires `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` environment variables.

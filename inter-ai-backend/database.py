@@ -55,3 +55,29 @@ class QuestionModel(db.Model):
             "stage": self.stage,
             "question": self.question
         }
+
+class ScenarioModel(db.Model):
+    __tablename__ = 'scenarios'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String, nullable=False)
+    description = Column(String)
+    ai_role = Column(String, nullable=False)
+    ai_role_short = Column(String)
+    user_role = Column(String, nullable=False)
+    scenario_text = Column(Text, nullable=False)
+    category = Column(String, nullable=False)
+    icon_name = Column(String) # Store icon name string, frontend will map it
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "ai_role": self.ai_role,
+            "ai_role_short": self.ai_role_short,
+            "user_role": self.user_role,
+            "scenario": self.scenario_text,
+            "category": self.category,
+            "icon": self.icon_name
+        }
