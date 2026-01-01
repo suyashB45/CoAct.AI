@@ -17,6 +17,7 @@ import {
 import Navigation from "../components/landing/Navigation"
 
 // Organized by category with real-world scenarios
+// Replaced by dynamic fetching
 const SCENARIO_CATEGORIES = [
     {
         name: "Change Management",
@@ -79,6 +80,37 @@ export default function Practice() {
     const [customAiRole, setCustomAiRole] = useState("")
     const [customScenario, setCustomScenario] = useState("")
     const [loading, setLoading] = useState(false)
+    const [categories, setCategories] = useState<any[]>([])
+    const [isLoadingData, setIsLoadingData] = useState(true)
+
+    // Icons map for dynamic rendering
+    const ICON_MAP: any = {
+        DollarSign, UserCog, Users, Briefcase, Presentation, Sparkles
+    }
+
+    // Fetch scenarios on mount
+    useState(() => {
+        const fetchScenarios = async () => {
+            try {
+                // Use relative URL so it works with proxy, or env var. 
+                // Hardcoding localhost:8000 for now as requested or relative.
+                // Best practice: use VITE_API_URL or relative /api if proxy setup.
+                // Assuming local setup:
+                const res = await fetch('http://localhost:8000/api/scenarios')
+                if (res.ok) {
+                    const data = await res.json()
+                    setCategories(data)
+                } else {
+                    console.error("Failed to fetch scenarios")
+                }
+            } catch (e) {
+                console.error(e)
+            } finally {
+                setIsLoadingData(false)
+            }
+        }
+        fetchScenarios()
+    })
 
 
     const handleStartSession = async (data: {
@@ -96,7 +128,7 @@ export default function Practice() {
                     role: data.role,
                     ai_role: data.ai_role,
                     scenario: data.scenario,
-                    framework: 'GROW'
+                    framework: 'auto'  // AI will automatically choose the best framework
                 })
             })
 
@@ -135,7 +167,7 @@ export default function Practice() {
         }
     }
 
-    const currentCategory = SCENARIO_CATEGORIES[activeCategory]
+    const currentCategory = categories[activeCategory] || { scenarios: [], color: "from-gray-500 to-slate-500" }
 
     return (
         <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-purple-500/30">
@@ -206,66 +238,75 @@ export default function Practice() {
                             className="max-w-6xl mx-auto"
                         >
                             {/* Scenarios Grid */}
-                            <motion.div className="grid lg:grid-cols-2 gap-8">
-                                {currentCategory.scenarios.map((scenario, idx) => (
-                                    <motion.div
-                                        key={scenario.title}
-                                        initial={{ opacity: 0, y: 30 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: idx * 0.1 }}
-                                        whileHover={{ y: -8, rotateX: 2, rotateY: -2 }}
-                                        className="card-ultra-glass card-3d-tilt group p-8 flex flex-col h-full relative overflow-hidden"
-                                        style={{ transformStyle: 'preserve-3d' }}
-                                    >
-                                        {/* Animated gradient orb on hover */}
-                                        <div className={`absolute top-0 right-0 w-80 h-80 bg-gradient-to-br ${currentCategory.color} opacity-0 group-hover:opacity-15 blur-[100px] transition-all duration-700 rounded-full -translate-y-1/2 translate-x-1/2`} />
-                                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
-
-                                        <div className="flex items-start gap-4 mb-6 relative z-10">
-                                            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentCategory.color} flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-                                                <scenario.icon className="w-7 h-7 group-hover:animate-pulse" />
-                                            </div>
-                                            <div>
-                                                <h3 className="text-2xl font-bold text-white mb-2">{scenario.title}</h3>
-                                                <p className="text-slate-400 font-medium">{scenario.description}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-3 mb-6 relative z-10">
-                                            <div className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-bold uppercase tracking-wider">
-                                                You: {scenario.user_role}
-                                            </div>
-                                            <div className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-bold uppercase tracking-wider">
-                                                AI: {scenario.ai_role_short}
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-slate-950/30 rounded-2xl p-5 mb-8 border border-white/5 grow relative z-10">
-                                            <p className="text-slate-300 text-sm leading-relaxed">
-                                                "{scenario.scenario}"
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            onClick={() => handleStartSession({
-                                                role: scenario.user_role,
-                                                ai_role: scenario.ai_role,
-                                                scenario: scenario.scenario,
-                                            })}
-                                            disabled={loading}
-                                            className="w-full btn-ultra-modern btn-press py-4 flex items-center justify-center gap-2 mt-auto relative z-10 group/btn"
+                            {isLoadingData ? (
+                                <div className="flex justify-center items-center h-64">
+                                    <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                                </div>
+                            ) : (
+                                <motion.div className="grid lg:grid-cols-2 gap-8">
+                                    {currentCategory.scenarios.map((scenario: any, idx: number) => (
+                                        <motion.div
+                                            key={scenario.title}
+                                            initial={{ opacity: 0, y: 30 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: idx * 0.1 }}
+                                            whileHover={{ y: -8, rotateX: 2, rotateY: -2 }}
+                                            className="card-ultra-glass card-3d-tilt group p-8 flex flex-col h-full relative overflow-hidden"
+                                            style={{ transformStyle: 'preserve-3d' }}
                                         >
-                                            {loading ? (
-                                                <Loader2 className="h-5 w-5 animate-spin" />
-                                            ) : (
-                                                <>
-                                                    Start Session <ChevronRight className="w-5 h-5" />
-                                                </>
-                                            )}
-                                        </button>
-                                    </motion.div>
-                                ))}
-                            </motion.div>
+                                            {/* Animated gradient orb on hover */}
+                                            <div className={`absolute top-0 right-0 w-80 h-80 bg-gradient-to-br ${currentCategory.color} opacity-0 group-hover:opacity-15 blur-[100px] transition-all duration-700 rounded-full -translate-y-1/2 translate-x-1/2`} />
+                                            <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
+
+                                            <div className="flex items-start gap-4 mb-6 relative z-10">
+                                                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentCategory.color} flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                                                    {(() => {
+                                                        const IconComponent = ICON_MAP[scenario.icon] || Sparkles
+                                                        return <IconComponent className="w-7 h-7 group-hover:animate-pulse" />
+                                                    })()}
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-2xl font-bold text-white mb-2">{scenario.title}</h3>
+                                                    <p className="text-slate-400 font-medium">{scenario.description}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-3 mb-6 relative z-10">
+                                                <div className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-bold uppercase tracking-wider">
+                                                    You: {scenario.user_role}
+                                                </div>
+                                                <div className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-bold uppercase tracking-wider">
+                                                    AI: {scenario.ai_role_short}
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-slate-950/30 rounded-2xl p-5 mb-8 border border-white/5 grow relative z-10">
+                                                <p className="text-slate-300 text-sm leading-relaxed">
+                                                    "{scenario.scenario}"
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                onClick={() => handleStartSession({
+                                                    role: scenario.user_role,
+                                                    ai_role: scenario.ai_role,
+                                                    scenario: scenario.scenario,
+                                                })}
+                                                disabled={loading}
+                                                className="w-full btn-ultra-modern btn-press py-4 flex items-center justify-center gap-2 mt-auto relative z-10 group/btn"
+                                            >
+                                                {loading ? (
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        Start Session <ChevronRight className="w-5 h-5" />
+                                                    </>
+                                                )}
+                                            </button>
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
+                            )}
                         </motion.div>
                     ) : (
                         <motion.div

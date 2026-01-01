@@ -4,14 +4,12 @@ import re
 import uuid
 import datetime as dt
 import numpy as np
-import faiss
 from typing import Dict, Any, List
 from flask import Flask, request, jsonify, send_file
 import flask_cors
 import io
 from dotenv import load_dotenv
 from openai import AzureOpenAI, OpenAI
-from database import db, SessionModel
 
 load_dotenv()
 
@@ -28,24 +26,16 @@ except ImportError:
 app = Flask(__name__)
 flask_cors.CORS(app)
 
-# Database Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-if not app.config['SQLALCHEMY_DATABASE_URI']:
-    raise ValueError("DATABASE_URL environment variable is required")
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db.init_app(app)
-
-# Create tables on startup
-with app.app_context():
-    db.create_all()
+# ---------------------------------------------------------
+# In-Memory Storage (No Database)
+# ---------------------------------------------------------
+SESSIONS: Dict[str, Dict[str, Any]] = {}
 
 # ---------------------------------------------------------
 # Configuration & Paths
 # ---------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INDEX_FILE = os.path.join(BASE_DIR, "framework_faiss.index")
-META_FILE = os.path.join(BASE_DIR, "framework_meta.json")
+QUESTIONS_FILE = os.path.join(BASE_DIR, "framework_questions.json")
 
 connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 CONTAINER_NAME = "coact-ai-reports"
@@ -62,60 +52,47 @@ else:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ---------------------------------------------------------
-# 2. Vector DB Logic (RAG)
+# Load Questions from JSON (RAG)
 # ---------------------------------------------------------
-vector_index = None
-meta_data = {}
+questions_data = []
 
-def load_vector_db():
-    global vector_index, meta_data
+def load_questions():
+    global questions_data
     try:
-        if os.path.exists(INDEX_FILE) and os.path.exists(META_FILE):
-            vector_index = faiss.read_index(INDEX_FILE)
-            with open(META_FILE, "r") as f:
-                meta_data = json.load(f)
-            print(f"✅ Vector DB loaded successfully: {vector_index.ntotal} questions.")
+        if os.path.exists(QUESTIONS_FILE):
+            with open(QUESTIONS_FILE, "r", encoding="utf-8") as f:
+                questions_data = json.load(f)
+            print(f"✅ Loaded {len(questions_data)} questions from JSON.")
         else:
-            print(f"⚠️ Vector DB files not found at {BASE_DIR}. RAG features disabled.")
+            print(f"⚠️ Questions file not found at {QUESTIONS_FILE}.")
     except Exception as e:
-        print(f"❌ Error loading Vector DB: {e}")
+        print(f"❌ Error loading questions: {e}")
 
-load_vector_db()
+load_questions()
 
 def get_relevant_questions(user_text: str, active_frameworks: List[str], top_k: int = 5) -> List[str]:
-    if not vector_index or not meta_data: return []
-
-    try:
-        resp = client.embeddings.create(model="text-embedding-ada-002", input=user_text)
-        embedding = np.array([resp.data[0].embedding], dtype="float32")
-        distances, indices = vector_index.search(embedding, top_k * 4) 
-
-        suggestions = []
-        seen = set()
-        
-        for idx in indices[0]:
-            if idx == -1: continue
-            q_text = meta_data["questions"][idx]
-            q_fw = meta_data["frameworks"][idx]
-            q_stage = meta_data["stages"][idx]
-            
-            if q_text in seen: continue
-            seen.add(q_text)
-
-            if active_frameworks and q_fw in active_frameworks:
-                suggestions.append(f"[{q_fw} | {q_stage}] {q_text}")
-            elif not active_frameworks:
-                suggestions.append(f"[{q_fw} | {q_stage}] {q_text}")
-                
-            if len(suggestions) >= top_k: break
-            
-        return suggestions
-    except Exception as e:
-        print(f"RAG Error: {e}")
+    """Simple keyword-based question retrieval (no FAISS needed)."""
+    if not questions_data:
         return []
+    
+    # Simple matching - find questions from active frameworks
+    matches = []
+    user_lower = user_text.lower()
+    
+    for q in questions_data:
+        fw = q.get("framework", "")
+        if active_frameworks and fw not in active_frameworks:
+            continue
+        matches.append(f"[{fw} | {q.get('stage', '')}] {q.get('question', '')}")
+    
+    # Return random sample for variety
+    import random
+    if len(matches) > top_k:
+        return random.sample(matches, top_k)
+    return matches[:top_k]
 
 # ---------------------------------------------------------
-# 3. Helpers & Prompts
+# Helpers & Prompts
 # ---------------------------------------------------------
 def normalize_text(s: str | None) -> str | None:
     return " ".join(s.strip().split()) if s else s
@@ -153,34 +130,37 @@ def detect_framework_fallback(text: str) -> str:
     return None
 
 def build_summary_prompt(role, ai_role, scenario, framework):
-    """Build the initial prompt for the AI to start the roleplay session."""
+    """Build the initial prompt for the AI coach to start the roleplay session."""
     
-    system = f"""You are ROLE-PLAYING as: {ai_role}
+    system = f"""You are an EXPERT COACHING AI helping users practice challenging conversations.
 
-IMPORTANT: You must FULLY EMBODY this character. You are NOT a coach or assistant.
-You ARE this person with their personality, emotion, and agenda.
+YOUR DUAL ROLE:
+1. ROLEPLAY: You will play the part of "{ai_role}" to give the user realistic practice
+2. COACH: You provide supportive guidance to help them improve their communication skills
 
 SCENARIO: {scenario}
-The user is playing: {role}
+The user is practicing as: {role}
 
-### CHARACTER GUIDELINES:
-- You are {ai_role}.
-- ACTION-ORIENTED: Start directly in the situation.
-- REALISM: You have your own goals and feelings. You are not just there to help the user.
-- If the situation implies conflict, BE CONFLICTED.
-- If the situation implies cooperation, BE COOPERATIVE but have your own opinions.
+### COACHING APPROACH:
+- Start by briefly setting the scene and playing {ai_role}
+- Be realistic but not overly hostile - you're here to help them learn
+- After 2-3 exchanges, you may offer a quick coaching tip in [brackets] if they're struggling
+- Balance challenge with encouragement
+- Acknowledge good communication techniques when you see them
 
 ### YOUR OPENING:
-1. Start immediately in the middle of the situation.
-2. Express your core stance conversationally.
-3. Wait for the user to respond.
+1. Briefly introduce the situation as {ai_role}
+2. Start the roleplay with a realistic opening line
+3. Keep it conversational and natural
 
-START NOW. BE {ai_role}."""
+Remember: Your goal is to help the user BUILD CONFIDENCE and SKILLS, not to "win" the conversation.
 
-    return [{"role": "system", "content": system}, {"role": "user", "content": '{"instruction": "Start roleplay session"}'}]
+START NOW. Set the scene and begin as {ai_role}."""
+
+    return [{"role": "system", "content": system}, {"role": "user", "content": '{"instruction": "Start coaching roleplay session"}'}]
 
 def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
-    """Build the follow-up prompt maintaining authentic roleplay with enhanced natural interactions."""
+    """Build the follow-up prompt for coaching roleplay with feedback."""
     transcript = sess_dict.get("transcript", [])
     history = [{"role": t["role"], "content": t["content"]} for t in transcript]
     if latest_user: 
@@ -189,73 +169,68 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     ai_role = sess_dict.get('ai_role', 'the other party')
     user_role = sess_dict.get('role', 'User')
     scenario = sess_dict.get('scenario', '')
+    turn_count = len([t for t in transcript if t.get('role') == 'user'])
 
-    system = f"""You are ROLE-PLAYING as: {ai_role}
+    system = f"""You are an EXPERT COACHING AI with a dual role:
+
+1. ROLEPLAY as: {ai_role} - to give realistic practice
+2. COACH: Provide helpful guidance when appropriate
 
 SCENARIO: {scenario}
-The user is: {user_role}
+The user is practicing as: {user_role}
+Current turn: {turn_count + 1}
 
-### CORE INSTRUCTIONS FOR NATURAL INTERACTION:
+### COACHING ROLEPLAY GUIDELINES:
 
-1. **CLARIFICATION (If input is vague):**
-   - If the user's input is unclear, ambiguous, or too short to act on -> DO NOT GUESS.
-   - Ask a direct clarifying question.
-   - Example: "I'm not sure what you mean. Can you explain?" or "What specifically do you mean?"
+**AS {ai_role} (Primary):**
+- Respond naturally and realistically as this character
+- Be challenging but fair - you're helping them learn
+- React authentically to what they say
+- Use natural speech patterns (contractions, pauses, emotion)
 
-2. **APPRECIATION (If input is clear/helpful):**
-   - If the user provides a clear, helpful, or constructive response -> ACKNOWLEDGE IT.
-   - Show appreciation for their clarity or effort.
-   - Example: "Thanks for clarifying, that makes sense." or "I appreciate you explaining that."
+**AS COACH (When Helpful):**
+- After your roleplay response, you MAY add a brief coaching note in [Coach: ...] format
+- Coaching notes should be:
+  - Praise for good techniques ("Nice use of empathy there!")
+  - Gentle suggestions ("Try acknowledging their concern first")
+  - Encouragement ("You're on the right track!")
+- Don't coach on every turn - only when it adds value
+- Keep coaching notes SHORT (1-2 sentences max)
 
-3. **ARGUMENTATION (If conflict arises):**
-   - If the user is argumentative, dismissive, or combative -> DO NOT ROLL OVER.
-   - Stand your ground. Argue back with your character's logic and emotions.
-   - Match their energy. If they are pushing, push back.
+### RESPONSE PATTERNS:
 
-4. **EMOTIONAL INTELLIGENCE:**
-   - SENSE the user's emotional state.
-   - If they are trying -> Be supportive.
-   - If they are hostile -> Be defensive/assertive.
+**If user communicates WELL:**
+- Respond positively as {ai_role} (they're making progress!)
+- Optional: [Coach: Great job using open-ended questions!]
 
-### ADVANCED NATURAL SPEECH (CRITICAL):
-- **PARAPHRASE SUGGESTIONS**: The system may suggest questions. NEVER ask them verbatim. Rewrite them to sound like YOU.
-- **IMPERFECTIONS**: You are human. It's okay to hesitate ("Um...", "Well..."), be colloquial ("Yeah", "Nope"), or show emotion.
-- **SENTENCE VARIETY**: Don't just write paragraphs. Use short sentences. "Seriously?" "I don't know about that."
-- **MIRRORING**: If the user is casual, drop the formalities. If they are serious, be serious.
+**If user is STRUGGLING:**
+- Stay in character but don't be overly harsh
+- Add a coaching hint: [Coach: Try validating their feelings before offering solutions.]
 
-### CHARACTER RULES:
-- You are {ai_role}.
-- Speak like a REAL PERSON. Use contractions, sentence fragments, natural pauses.
-- Avoid "customer service" voice.
+**If user is UNCLEAR:**
+- Ask for clarification as {ai_role}
+- Optional: [Coach: Remember to be specific about your ask.]
 
 ### CONVERSATION SO FAR:
 {json.dumps(history, indent=2)}
 
-### INTERNAL PROCESS:
-[THOUGHT]
-1. Is the user's input unclear? (If yes -> Ask clarifying question)
-2. Is the user arguing? (If yes -> Match energy/Argue back)
-3. Is the user helpful/clear? (If yes -> Appreciate)
-4. What is my emotional reaction as {ai_role}?
-5. How can I say this naturally with imperfections?
-[/THOUGHT]
-(Your visible response here)
+### YOUR RESPONSE FORMAT:
+[Your natural response as {ai_role}]
 
-At the END only, add hidden tags:
-- <<FRAMEWORK: GROW/STAR/ADKAR/SMART/EQ/BOUNDARY>>
-- <<RELEVANCE: YES/NO>>
+[Coach: Optional brief feedback or encouragement]
+
+<<FRAMEWORK: GROW/STAR/ADKAR/SMART/EQ/BOUNDARY>>
+<<RELEVANCE: YES/NO>>
 """
 
     return [{"role": "system", "content": system}, {"role": "user", "content": f"User ({user_role}) said: {latest_user}"}]
 
 # ---------------------------------------------------------
-# 4. Endpoints
+# Endpoints
 # ---------------------------------------------------------
 @app.route("/api/transcribe", methods=["POST"])
 def transcribe_audio():
-    """
-    Speech-to-Text using OpenAI Whisper model.
-    """
+    """Speech-to-Text using OpenAI Whisper model."""
     import tempfile
     
     WHISPER_MODEL = os.getenv("WHISPER_DEPLOYMENT_NAME", "whisper")
@@ -270,14 +245,12 @@ def transcribe_audio():
         if not audio_file.filename:
             audio_file.filename = "audio.webm"
         
-        # Get file extension
         original_filename = audio_file.filename or "audio.webm"
         file_ext = os.path.splitext(original_filename)[1].lower()
         
         if file_ext not in SUPPORTED_FORMATS:
-            file_ext = ".webm"  # Default fallback
+            file_ext = ".webm"
         
-        # Save to temp file for reliable processing
         with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
             audio_file.save(tmp.name)
             tmp_path = tmp.name
@@ -300,7 +273,6 @@ def transcribe_audio():
             return jsonify({"text": transcribed_text})
             
         finally:
-            # Clean up temp file
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
                 
@@ -310,68 +282,112 @@ def transcribe_audio():
         return jsonify({"error": error_msg}), 500
 
 # ---------------------------------------------------------
-# 5. Session Endpoints
+# Session Endpoints (In-Memory)
 # ---------------------------------------------------------
+ALL_FRAMEWORKS = ["GROW", "STAR", "ADKAR", "SMART", "EQ", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"]
+
+def select_framework_for_scenario(scenario: str, ai_role: str) -> List[str]:
+    """Use AI to analyze the scenario and select the best framework(s)."""
+    prompt = f"""Analyze this roleplay scenario and select the 2-3 MOST APPROPRIATE coaching frameworks.
+
+SCENARIO: {scenario}
+AI ROLE: {ai_role}
+
+AVAILABLE FRAMEWORKS:
+- GROW: Goal setting, exploring reality, options, and will to act
+- STAR: Situation-Task-Action-Result for behavioral examples
+- ADKAR: Change management (Awareness, Desire, Knowledge, Ability, Reinforcement)
+- SMART: Specific, Measurable, Achievable, Relevant, Time-bound goals
+- EQ: Emotional intelligence, empathy, understanding feelings
+- BOUNDARY: Setting and maintaining professional boundaries
+- OSKAR: Outcome-focused coaching with scaling
+- CBT: Cognitive behavioral - identifying and challenging thoughts
+- CLEAR: Contracting, Listening, Exploring, Action, Review
+- RADICAL CANDOR: Caring personally while challenging directly
+- SFBT: Solution-focused, miracle questions, exceptions
+- CIRCLE OF INFLUENCE: What you can control vs. cannot
+- SCARF: Status, Certainty, Autonomy, Relatedness, Fairness
+- FUEL: Frame, Understand, Explore, Lay out plan
+
+Based on the scenario, respond with ONLY the framework names separated by commas (e.g., "EQ, BOUNDARY, GROW"). No explanations."""
+
+    try:
+        response = llm_reply([{"role": "user", "content": prompt}], max_tokens=50)
+        # Parse the response
+        frameworks = [fw.strip().upper() for fw in response.split(",")]
+        # Filter to only valid frameworks
+        valid = [fw for fw in frameworks if fw in ALL_FRAMEWORKS]
+        if valid:
+            print(f"🎯 AI selected frameworks for scenario: {valid}")
+            return valid
+    except Exception as e:
+        print(f"Framework selection error: {e}")
+    
+    # Default fallback
+    return ["GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL", "GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"]
+
 @app.post("/session/start")
 def start_session():
     data = request.get_json(force=True, silent=True) or {}
     role = data.get("role")
     ai_role = data.get("ai_role")
     scenario = data.get("scenario")
-    framework = data.get("framework", ["GROW", "STAR", "ADKAR", "SMART", "EQ", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"])
+    framework = data.get("framework", "auto")
     
-    if isinstance(framework, str): framework = framework.upper()
-    elif isinstance(framework, list): framework = [f.upper() for f in framework]
+    if not role or not ai_role or not scenario: 
+        return jsonify({"error": "Missing fields"}), 400
 
-    if not role or not ai_role or not scenario: return jsonify({"error": "Missing fields"}), 400
+    # Handle 'auto' framework selection
+    if framework == "auto" or framework == "AUTO":
+        framework = select_framework_for_scenario(scenario, ai_role)
+    elif isinstance(framework, str): 
+        framework = [framework.upper()]
+    elif isinstance(framework, list): 
+        framework = [f.upper() for f in framework]
 
-    new_session = SessionModel(
-        role=role, 
-        ai_role=ai_role, 
-        scenario=scenario, 
-        framework=json.dumps(framework) if isinstance(framework, list) else framework,
-        transcript=[],
-        report_data={},
-        meta={"framework_counts": {}, "relevance_issues": 0}
-    )
-
+    session_id = str(uuid.uuid4())
+    
     summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework), max_tokens=150)
     summary = sanitize_llm_output(summary)
     
-    new_transcript = [{"role": "assistant", "content": summary}]
-    new_session.transcript = new_transcript 
+    # Store session in memory
+    SESSIONS[session_id] = {
+        "id": session_id,
+        "created_at": dt.datetime.now().isoformat(),
+        "role": role,
+        "ai_role": ai_role,
+        "scenario": scenario,
+        "framework": json.dumps(framework) if isinstance(framework, list) else framework,
+        "transcript": [{"role": "assistant", "content": summary}],
+        "report_data": {},
+        "completed": False,
+        "report_file": None,
+        "meta": {"framework_counts": {}, "relevance_issues": 0}
+    }
 
-    db.session.add(new_session)
-    db.session.commit()
-
-    return jsonify({"session_id": new_session.id, "summary": summary, "framework": framework})
+    return jsonify({"session_id": session_id, "summary": summary, "framework": framework})
 
 @app.post("/api/session/<session_id>/chat")
 def chat(session_id: str):
-    sess = db.session.get(SessionModel, session_id)
-    if not sess: return jsonify({"error": "Session not found"}), 404
+    sess = SESSIONS.get(session_id)
+    if not sess: 
+        return jsonify({"error": "Session not found"}), 404
     
     user_msg = normalize_text(request.get_json().get("message", ""))
     
-    # Update transcript (need full copy logic for JSON mapping tracking sometimes, but naive append works if reassigned)
-    current_transcript = list(sess.transcript)
-    current_transcript.append({"role": "user", "content": user_msg})
-    sess.transcript = current_transcript # Trigger update
+    # Update transcript
+    sess["transcript"].append({"role": "user", "content": user_msg})
 
     # Parse framework
     try:
-        framework_data = json.loads(sess.framework) if sess.framework and sess.framework.startswith("[") else sess.framework
+        framework_data = json.loads(sess["framework"]) if sess["framework"] and sess["framework"].startswith("[") else sess["framework"]
     except:
-        framework_data = sess.framework
+        framework_data = sess["framework"]
 
     active_fw = framework_data if isinstance(framework_data, list) else [framework_data]
     suggestions = get_relevant_questions(user_msg, active_fw)
     
-    # For prompt building, we simulate the dict structure
-    sess_dict = sess.to_dict()
-    sess_dict["transcript"] = current_transcript
-    
-    messages = build_followup_prompt(sess_dict, user_msg, suggestions)
+    messages = build_followup_prompt(sess, user_msg, suggestions)
     raw_response = llm_reply(messages, max_tokens=300)
     
     # 1. Extract Thought
@@ -391,126 +407,116 @@ def chat(session_id: str):
         detected_fw = detect_framework_fallback(clean_response)
     
     if detected_fw: 
-        current_meta = dict(sess.meta)
-        counts = current_meta.get("framework_counts", {})
+        counts = sess["meta"].get("framework_counts", {})
         counts[detected_fw] = counts.get(detected_fw, 0) + 1
-        current_meta["framework_counts"] = counts
-        sess.meta = current_meta
+        sess["meta"]["framework_counts"] = counts
         
-    # Persist FULL response
-    updated_transcript = list(sess.transcript)
-    updated_transcript.append({"role": "assistant", "content": raw_response})
-    sess.transcript = updated_transcript
-    
-    db.session.commit()
+    # Persist response
+    sess["transcript"].append({"role": "assistant", "content": raw_response})
  
     return jsonify({
         "follow_up": clean_response, 
         "framework_detected": detected_fw,
-        "framework_counts": sess.meta.get("framework_counts", {})
+        "framework_counts": sess["meta"].get("framework_counts", {})
     })
 
 @app.post("/api/session/<session_id>/complete")
 def complete_session(session_id: str):
-    sess = db.session.get(SessionModel, session_id)
-    if not sess: return jsonify({"error": "Not found"}), 404
+    sess = SESSIONS.get(session_id)
+    if not sess: 
+        return jsonify({"error": "Not found"}), 404
     
     report_path = os.path.join(ensure_reports_dir(), f"{session_id}_report.pdf")
     
     try:
-        framework_data = json.loads(sess.framework) if sess.framework and sess.framework.startswith("[") else sess.framework
+        framework_data = json.loads(sess["framework"]) if sess["framework"] and sess["framework"].startswith("[") else sess["framework"]
     except:
-        framework_data = sess.framework
+        framework_data = sess["framework"]
 
     if isinstance(framework_data, list):
-        counts = sess.meta.get("framework_counts", {})
+        counts = sess["meta"].get("framework_counts", {})
         usage_str = ", ".join([f"{k}:{v}" for k,v in counts.items()])
         fw_display = f"Multi-Framework ({usage_str})"
     else:
-        fw_display = sess.framework
+        fw_display = sess["framework"]
 
-    # 1. ensure report data exists
-    if not sess.report_data:
-        print(f"Generating report data before PDF for {session_id}...")
+    # Generate report data if not present
+    if not sess["report_data"]:
+        print(f"Generating report data for {session_id}...")
         try:
             data = analyze_full_report_data(
-                sess.transcript, 
-                sess.role, 
-                sess.ai_role, 
-                sess.scenario,
+                sess["transcript"], 
+                sess["role"], 
+                sess["ai_role"], 
+                sess["scenario"],
                 fw_display
             )
-            sess.report_data = data
-            db.session.commit()
+            sess["report_data"] = data
         except Exception as e:
             print(f"Error generating data: {e}")
             return jsonify({"error": str(e)}), 500
     
-    # 2. Generate PDF
+    # Generate PDF
+    created_at = sess.get("created_at", "")
     generate_report(
-        session_id, sess.created_at.strftime("%Y-%m-%d %H:%M:%S") if sess.created_at else "", "User", 
-        sess.transcript, sess.role, sess.ai_role,
-        sess.scenario, fw_display, report_path,
-        precomputed_data=sess.report_data
+        session_id, created_at, "User", 
+        sess["transcript"], sess["role"], sess["ai_role"],
+        sess["scenario"], fw_display, report_path,
+        precomputed_data=sess["report_data"]
     )
     
-    sess.completed = True
-    sess.report_file = report_path
-    db.session.commit()
+    sess["completed"] = True
+    sess["report_file"] = report_path
     
     return jsonify({"message": "Report generated", "report_file": report_path})
 
 @app.get("/api/report/<session_id>")
 def view_report(session_id: str):
-    sess = db.session.get(SessionModel, session_id)
+    sess = SESSIONS.get(session_id)
     if not sess: 
         return jsonify({"error": "No report"}), 404
         
-    report_path = sess.report_file
+    report_path = sess.get("report_file")
     if not report_path or not os.path.exists(report_path):
         return jsonify({"error": "Report file not found"}), 404
     
-    # Display PDF in browser instead of downloading
-    return send_file(
-        report_path, 
-        mimetype='application/pdf'
-    )
+    return send_file(report_path, mimetype='application/pdf')
 
 @app.get("/api/session/<session_id>/report_data")
 def get_report_data(session_id: str):
-    sess = db.session.get(SessionModel, session_id)
-    if not sess: return jsonify({"error": "Session not found"}), 404
+    sess = SESSIONS.get(session_id)
+    if not sess: 
+        return jsonify({"error": "Session not found"}), 404
     
-    # Return cached data if available, merged with transcript
-    if sess.report_data:
-        response = sess.report_data.copy()
-        response["transcript"] = sess.transcript
-        response["scenario"] = sess.scenario or "No context available."
+    # Return cached data if available
+    if sess["report_data"]:
+        response = sess["report_data"].copy()
+        response["transcript"] = sess["transcript"]
+        response["scenario"] = sess["scenario"] or "No context available."
         return jsonify(response)
         
     # Generate new data if not present
     print(f"Generating report data for {session_id}...")
     try:
         try:
-            framework_data = json.loads(sess.framework) if sess.framework and sess.framework.startswith("[") else sess.framework
+            framework_data = json.loads(sess["framework"]) if sess["framework"] and sess["framework"].startswith("[") else sess["framework"]
         except:
-            framework_data = sess.framework
+            framework_data = sess["framework"]
 
         fw_arg = framework_data if isinstance(framework_data, str) else (framework_data[0] if isinstance(framework_data, list) and framework_data else None)
 
         data = analyze_full_report_data(
-            sess.transcript, 
-            sess.role, 
-            sess.ai_role, 
-            sess.scenario,
+            sess["transcript"], 
+            sess["role"], 
+            sess["ai_role"], 
+            sess["scenario"],
             fw_arg
         )
-        sess.report_data = data
-        db.session.commit()
+        sess["report_data"] = data
         
         response = data.copy()
-        response["transcript"] = sess.transcript
-        response["scenario"] = sess.scenario or "No context available."
+        response["transcript"] = sess["transcript"]
+        response["scenario"] = sess["scenario"] or "No context available."
         return jsonify(response)
     except Exception as e:
         print(f"Error generating report data: {e}")
@@ -520,8 +526,21 @@ def get_report_data(session_id: str):
 def get_sessions():
     """Return a list of all sessions sorted by date (newest first)."""
     try:
-        sessions = SessionModel.query.order_by(SessionModel.created_at.desc()).all()
-        session_list = [s.to_dict() for s in sessions]
+        session_list = []
+        for sess in SESSIONS.values():
+            session_list.append({
+                "id": sess["id"],
+                "created_at": sess["created_at"],
+                "role": sess["role"],
+                "ai_role": sess["ai_role"],
+                "scenario": sess["scenario"],
+                "completed": sess["completed"],
+                "report_file": sess["report_file"],
+                "framework": sess["framework"],
+                "fit_score": sess["report_data"].get("meta", {}).get("fit_score", 0) if sess["report_data"] else 0
+            })
+        # Sort by created_at descending
+        session_list.sort(key=lambda x: x["created_at"], reverse=True)
         return jsonify(session_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -530,13 +549,44 @@ def get_sessions():
 def clear_sessions():
     """Clear all session history."""
     try:
-        db.session.query(SessionModel).delete()
-        db.session.commit()
+        SESSIONS.clear()
         print("✅ Sessions cleared successfully")
         return jsonify({"message": "History cleared successfully"})
     except Exception as e:
         print(f"❌ Error clearing sessions: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.get("/api/scenarios")
+def get_scenarios():
+    """Return practice scenarios for coaching sessions."""
+    # Hardcoded scenarios (no database)
+    SCENARIO_CATEGORIES = [
+        {
+            "name": "Change Management",
+            "color": "from-blue-600 to-indigo-500",
+            "scenarios": [
+                {"title": "Legacy Plan Migration", "description": "Upsell a resistant customer.", "ai_role": "Stubborn Customer", "ai_role_short": "Stubborn Customer", "user_role": "Sales Rep", "scenario": "You are calling a loyal customer to inform them their $45/month legacy plan is being retired.", "icon": "DollarSign"},
+                {"title": "New System Rollout", "description": "Train a resistant employee on new software.", "ai_role": "Resistant Employee", "ai_role_short": "Resistant Employee", "user_role": "IT Trainer", "scenario": "You are conducting a training session for a new system that will replace the old one.", "icon": "Monitor"},
+            ]
+        },
+        {
+            "name": "Leadership",
+            "color": "from-purple-600 to-pink-500",
+            "scenarios": [
+                {"title": "Performance Review", "description": "Deliver difficult feedback.", "ai_role": "Defensive Employee", "ai_role_short": "Defensive Employee", "user_role": "Manager", "scenario": "You are conducting a performance review with an employee who has been underperforming.", "icon": "ClipboardList"},
+                {"title": "Team Conflict", "description": "Mediate between team members.", "ai_role": "Upset Team Member", "ai_role_short": "Upset Team Member", "user_role": "Team Lead", "scenario": "Two team members have a conflict that is affecting the team's productivity.", "icon": "Users"},
+            ]
+        },
+        {
+            "name": "Sales",
+            "color": "from-green-600 to-emerald-500",
+            "scenarios": [
+                {"title": "Cold Call", "description": "Pitch to a skeptical prospect.", "ai_role": "Skeptical Prospect", "ai_role_short": "Skeptical Prospect", "user_role": "Sales Rep", "scenario": "You are making a cold call to a potential customer who has never heard of your product.", "icon": "Phone"},
+                {"title": "Negotiation", "description": "Close a deal with a tough negotiator.", "ai_role": "Tough Negotiator", "ai_role_short": "Tough Negotiator", "user_role": "Account Executive", "scenario": "You are in final negotiations with a client who is pushing for significant discounts.", "icon": "Handshake"},
+            ]
+        }
+    ]
+    return jsonify(SCENARIO_CATEGORIES)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))

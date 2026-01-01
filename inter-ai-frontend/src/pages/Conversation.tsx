@@ -124,7 +124,7 @@ export default function Conversation() {
                 ? sessionData.transcript
                 : [{
                     role: "assistant",
-                    content: `Hello! I'm your ${sessionData.ai_role}. We are here to practice: ${sessionData.scenario}. Ready?`
+                    content: `Hi! I'm your AI coach. Today we'll practice: ${sessionData.scenario}. I'll play the role of ${sessionData.ai_role} to give you realistic practice, and I'll offer coaching tips along the way. Ready when you are!`
                 }]
 
             setState((prev) => ({

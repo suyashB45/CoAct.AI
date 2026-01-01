@@ -24,43 +24,38 @@ export default function SessionHistory() {
     const [filter, setFilter] = useState<'all' | 'completed' | 'ongoing'>('all')
 
     useEffect(() => {
-        // Load sessions from localStorage (no backend needed)
-        const loadSessions = () => {
+        const fetchSessions = async () => {
             try {
-                const allSessions: SessionItem[] = []
+                // Fetch from backend
+                const res = await fetch('http://localhost:8000/api/sessions')
+                if (!res.ok) throw new Error('Failed to fetch sessions')
 
-                // Scan localStorage for session data
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i)
-                    if (key && key.startsWith('session_session_')) {
-                        const data = localStorage.getItem(key)
-                        if (data) {
-                            const session = JSON.parse(data)
-                            allSessions.push({
-                                id: session.sessionId || key.replace('session_', ''),
-                                created_at: session.createdAt || new Date().toISOString(),
-                                role: session.role || 'Unknown Role',
-                                ai_role: session.ai_role || 'AI Coach',
-                                scenario: session.scenario || 'Practice Session',
-                                completed: session.completed || false,
-                                fit_score: session.fit_score || 0
-                            })
-                        }
-                    }
-                }
+                const data = await res.json()
 
-                // Sort by date (newest first)
-                allSessions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                // Map backend format to frontend interface if needed
+                // Backend returns: SessionModel.to_dict()
+                // Frontend SessionItem expects: id, created_at, role, ai_role...
+                // They match mostly. We just need to ensure correct mapping.
 
-                setSessions(allSessions)
+                const mappedSessions = data.map((s: any) => ({
+                    id: s.id,
+                    created_at: s.created_at,
+                    role: s.role,
+                    ai_role: s.ai_role,
+                    scenario: s.scenario,
+                    completed: s.completed,
+                    fit_score: s.fit_score // Ensure backend sends this
+                }))
+
+                setSessions(mappedSessions)
             } catch (err) {
-                console.error("Failed to load sessions from localStorage", err)
+                console.error("Failed to load sessions from API", err)
             } finally {
                 setLoading(false)
             }
         }
 
-        loadSessions()
+        fetchSessions()
     }, [])
 
     const formatDate = (dateString: string) => {
