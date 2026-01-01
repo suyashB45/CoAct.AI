@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Mic, Square, ArrowLeft, Clock, User, Bot, Send, Sparkles, History, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { getApiUrl } from "@/lib/api"
 
 interface TranscriptMessage {
     role: "user" | "assistant"
@@ -197,7 +198,7 @@ export default function Conversation() {
                     const formData = new FormData()
                     formData.append('file', audioBlob, 'audio.webm')
 
-                    const response = await fetch('http://localhost:8000/api/transcribe', {
+                    const response = await fetch(getApiUrl('/api/transcribe'), {
                         method: 'POST',
                         body: formData
                     })
@@ -258,7 +259,7 @@ export default function Conversation() {
 
         try {
             // Call backend chat API
-            const response = await fetch(`http://localhost:8000/api/session/${sessionId}/chat`, {
+            const response = await fetch(getApiUrl(`/api/session/${sessionId}/chat`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message })
@@ -309,7 +310,7 @@ export default function Conversation() {
 
         try {
             // Call backend to complete session and generate report
-            await fetch(`http://localhost:8000/api/session/${sessionId}/complete`, {
+            await fetch(getApiUrl(`/api/session/${sessionId}/complete`), {
                 method: 'POST'
             })
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Loader2, Download, AlertCircle, TrendingUp, Brain, MessageSquare, Zap, BookOpen, Target, Trophy, Clock, User, Bot, History, Sparkles, Lightbulb, CheckCircle, ChevronUp, ChevronDown } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import Navigation from "../components/landing/Navigation"
+import { getApiUrl } from "@/lib/api"
 
 // Helper to map signals to scores
 // Helper to map signals to colors
@@ -192,7 +193,7 @@ export default function Report() {
                 if (!sessionId) return
 
                 // Fetch from backend
-                const response = await fetch(`http://localhost:8000/api/session/${sessionId}/report_data`)
+                const response = await fetch(getApiUrl(`/api/session/${sessionId}/report_data`))
                 if (!response.ok) {
                     throw new Error("Failed to fetch report data")
                 }
@@ -212,7 +213,7 @@ export default function Report() {
     const handleDownload = async () => {
         try {
             // Fetch the PDF from backend
-            const response = await fetch(`http://localhost:8000/api/report/${sessionId}`)
+            const response = await fetch(getApiUrl(`/api/report/${sessionId}`))
 
             if (!response.ok) {
                 throw new Error("Failed to generate PDF")
