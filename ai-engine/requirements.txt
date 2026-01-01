@@ -1,0 +1,17 @@
+Flask
+flask-cors
+openai
+azure-storage-blob
+azure-cognitiveservices-speech
+python-dotenv
+fpdf
+matplotlib
+numpy
+faiss-cpu
+requests
+uvicorn
+dotenv
+fastapi
+psycopg2-binary
+sqlalchemy
+flask-sqlalchemy

@@ -1,0 +1,17 @@
+node_modules
+.venv
+venv
+__pycache__
+.env
+dist
+build
+.DS_Store
+reports
+*.pyc
+
+# Service specific
+client/node_modules
+client/dist
+server/node_modules
+ai-engine/__pycache__
+ai-engine/venv
