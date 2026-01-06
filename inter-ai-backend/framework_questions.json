@@ -6748,5 +6748,293 @@
     "framework": "FUEL",
     "stage": "Lay Out",
     "question": "What is our shared understanding of next steps?"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Frame",
+    "question": "What is the most important issue we need to discuss today?",
+    "id": "92837ba3-22ea-4380-b2db-257eef6b1978"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Frame",
+    "question": "What is your purpose for this conversation?",
+    "id": "7b7a94cf-f2ff-47da-b29e-dc4147bab299"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Understand",
+    "question": "How does this situation look from your perspective?",
+    "id": "ab78ca2b-82cb-4469-81a0-9e3a526b2809"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Understand",
+    "question": "What is vital for me to know about this?",
+    "id": "df91e9b8-c541-4166-9708-b76563bd33b6"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Explore",
+    "question": "What are some possible ways to achieve your goal?",
+    "id": "f3180657-fb7a-4f61-8fe6-201d3735226d"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Explore",
+    "question": "What would be the ideal outcome?",
+    "id": "364393b3-ca2e-40ab-a048-8cf78a267a87"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Lay Out",
+    "question": "What specific steps will you take next?",
+    "id": "74d9f010-3254-4c09-a86a-f6f70d6db6a9"
+  },
+  {
+    "framework": "FUEL",
+    "stage": "Lay Out",
+    "question": "What is your timeline for these actions?",
+    "id": "e63e1457-1449-42cb-8372-ae565a6c92fd"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Topic",
+    "question": "What would you like to focus on today?",
+    "id": "4b31e317-b6c0-458c-bc68-72d52d97f647"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Topic",
+    "question": "Why is this topic important right now?",
+    "id": "139b3b94-69a5-4203-9f88-e39f42cd51bc"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Goal",
+    "question": "What do you want to achieve by the end of this session?",
+    "id": "199dcc65-b5cd-445e-af85-5f4423ad4c30"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Reality",
+    "question": "What is happening now that makes this an issue?",
+    "id": "d7a0604e-1b24-40f6-bbb9-b4de3f88d72c"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Reality",
+    "question": "Who else is involved in this situation?",
+    "id": "d1f884c5-9546-4b3d-a8af-c9b90f8606a0"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Options",
+    "question": "What could you do to change the situation?",
+    "id": "d4d559b2-e99b-4b83-8344-427ab54e53bd"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Options",
+    "question": "What are the pros and cons of that option?",
+    "id": "869c85b0-68e9-4b3b-a488-198fedf526ea"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Will",
+    "question": "What will you do? (Is it a promise?)",
+    "id": "6381fe0f-0f82-422f-acd1-debe6390e583"
+  },
+  {
+    "framework": "TGROW",
+    "stage": "Will",
+    "question": "On a scale of 1-10, how committed are you?",
+    "id": "4c31201f-d16e-482f-bc34-9b2d347762a3"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Situation",
+    "question": "When and where did the behavior occur?",
+    "id": "07695b49-4f4e-4fb0-beec-71210b4a207c"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Behavior",
+    "question": "What specific behavior did you observe?",
+    "id": "2d4ec72b-4c6c-47b4-87c8-61d635000c1c"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Behavior",
+    "question": "Can you describe what happened without judgment?",
+    "id": "552af29e-176b-4b75-ba2b-bf0ebe20c359"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Impact",
+    "question": "What was the impact of this behavior on you or others?",
+    "id": "d2439593-b800-4d4f-b0f1-76b1ac88d432"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Impact",
+    "question": "How did it make you feel?",
+    "id": "ff6ab2b6-cc33-4d34-9a21-18baea1ea71c"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Specify",
+    "question": "What different behavior would you like to see?",
+    "id": "bab6b6e4-ee0b-462e-9a82-73d3fd0a933c"
+  },
+  {
+    "framework": "SBI/DESC",
+    "stage": "Consequences",
+    "question": "What will happen if this change occurs (or doesn't)?",
+    "id": "395804a4-35db-49a0-963a-b849f27d5b6c"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Listen",
+    "question": "What exactly is the other person saying?",
+    "id": "1efbf6df-c785-4fd0-867e-37805a857ddd"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Listen",
+    "question": "Are you listening to understand or to reply?",
+    "id": "4777fef8-cbab-490c-948d-9b645303492d"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Acknowledge",
+    "question": "How can you validate their concern?",
+    "id": "ae817f76-f696-445e-9d2d-f3a55ae8434a"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Acknowledge",
+    "question": "What phrase could show you understand their position?",
+    "id": "d7264f34-de00-4d8b-9109-55a5a9f090fd"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Explore",
+    "question": "What question could uncover the root cause?",
+    "id": "6e077d43-9868-495a-b4fb-572933850197"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Explore",
+    "question": "What assumptions do we need to check?",
+    "id": "9d727a6f-d2ba-4fcd-b5d8-ca3bcef582a9"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Respond",
+    "question": "What is the best solution we can offer now?",
+    "id": "e01e3767-1401-42b5-bb10-ed111f4331c0"
+  },
+  {
+    "framework": "LAER",
+    "stage": "Respond",
+    "question": "How does our proposal address their specific concern?",
+    "id": "c40733b3-f230-43d3-8255-55b4b211632d"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Discovery",
+    "question": "What are the high points of your experience so far?",
+    "id": "85ab6acb-db2a-407b-b2d9-71657ca97099"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Discovery",
+    "question": "What do you value most about yourself/the team?",
+    "id": "8478e454-48f2-4302-b1a3-a1151af55dff"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Dream",
+    "question": "Imagine a year from now, what does success look like?",
+    "id": "c4c45b86-558c-4463-af67-34b37fe38e0d"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Dream",
+    "question": "What is your boldest aspiration for the future?",
+    "id": "008a09f2-52d9-4750-a42e-c475978ce647"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Design",
+    "question": "What structures need to be in place to support this dream?",
+    "id": "ec278064-da70-4289-a38f-1826ffbef9b5"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Design",
+    "question": "How can we leverage our strengths to build this?",
+    "id": "8a0e68ee-8465-4e3c-ac2f-03aa2b008c4b"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Destiny",
+    "question": "What will you do to sustain this momentum?",
+    "id": "93efdde4-5059-48aa-a6ae-37cc0c8f9924"
+  },
+  {
+    "framework": "APPRECIATIVE INQUIRY",
+    "stage": "Destiny",
+    "question": "How will we know we are making progress?",
+    "id": "25b49d67-947d-4d32-9176-93bfa111b55b"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Feature-Link",
+    "question": "You mentioned a feature; what is the direct benefit to the customer?",
+    "id": "2d61d7ca-b6e4-447c-87f6-614e05931b7b"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Feature-Link",
+    "question": "How does that feature solve a specific problem they have?",
+    "id": "a9bb5c21-2fe2-4f2d-9aa8-eea7c444869c"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Feature-Link",
+    "question": "Can you complete the sentence: 'This means that you...'?",
+    "id": "48f14e70-17e2-4dcb-9e43-666ed3efff27"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Language",
+    "question": "How could you describe that attribute more professionally?",
+    "id": "c03898af-45d0-4a61-9beb-1073e63ebaf5"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Language",
+    "question": "What words would build more trust in this quality?",
+    "id": "94bbf94d-362a-4754-8aaf-daf7ed60bec3"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Simplicity",
+    "question": "If you could only mention one benefit, what would it be?",
+    "id": "76a1d56c-0833-4a7a-84ad-b2a37955962b"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Simplicity",
+    "question": "Are we overwhelming them with too many details?",
+    "id": "f77ecb60-a3e4-40a0-8b1d-5eb1b44ce313"
+  },
+  {
+    "framework": "BENEFIT-SELLING",
+    "stage": "Simplicity",
+    "question": "How can we make this point more concise?",
+    "id": "9dcbef9e-bbf3-4b9b-b612-4fd83ad8d8b7"
   }
 ]

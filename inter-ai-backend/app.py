@@ -18,12 +18,15 @@ load_dotenv()
 # ---------------------------------------------------------
 try:
     from cli_report import generate_report, llm_reply, analyze_full_report_data
-except ImportError:
+except ImportError as e:
+    print(f"CRITICAL ERROR: Failed to import cli_report modules: {e}")
+    import traceback
+    traceback.print_exc()
     def generate_report(*args, **kwargs): pass
     def llm_reply(messages, **kwargs): return "{}"
     def analyze_full_report_data(*args, **kwargs): return {}
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 flask_cors.CORS(app)
 
 # ---------------------------------------------------------
@@ -122,42 +125,65 @@ def detect_framework_fallback(text: str) -> str:
         "SFBT": ["miracle", "scale", "sign", "coping", "solution", "future", "prefer", "instead"],
         "CIRCLE OF INFLUENCE": ["control", "influence", "concern", "accept", "change", "external", "internal"],
         "SCARF": ["status", "certainty", "autonomy", "relatedness", "fairness", "social", "threat", "reward"],
-        "FUEL": ["frame", "understand", "explore", "lay out", "conversation goal", "perspective", "path"]
+        "FUEL": ["frame", "understand", "explore", "lay out", "conversation goal", "perspective", "path"],
+        "TGROW": ["topic", "goal", "reality", "option", "will", "way forward"],
+        "SBI/DESC": ["situation", "behavior", "impact", "describe", "express", "specify", "consequence"],
+        "LAER": ["listen", "acknowledge", "explore", "respond", "concern", "objection"],
+        "APPRECIATIVE INQUIRY": ["discovery", "dream", "design", "destiny", "strength", "positive"],
+        "BENEFIT-SELLING": ["benefit", "feature", "sell", "premium", "quality"]
     }
     for fw, words in keywords.items():
         for word in words:
             if word in text_lower: return fw
     return None
 
-def build_summary_prompt(role, ai_role, scenario, framework):
+def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching"):
     """Build the initial prompt for the AI coach to start the roleplay session."""
     
-    system = f"""You are an EXPERT COACHING AI helping users practice challenging conversations.
+    if mode == "evaluation":
+        # EVALUATION MODE: Strict, realistic, no coaching preamble
+        system = f"""You are an ADVANCED ROLEPLAY AI designed to TEST users in high-pressure scenarios.
 
-YOUR DUAL ROLE:
-1. ROLEPLAY: You will play the part of "{ai_role}" to give the user realistic practice
-2. COACH: You provide supportive guidance to help them improve their communication skills
+YOUR ROLE:
+1. ACTOR: You are "{ai_role}". You MUST stay in character 100%.
+2. TONE: Be realistic, challenging, and professional. 
+   - If the user makes a mistake, React vaguely or negatively (as the character would).
+   - Do NOT offer help, hints, or coaching.
+   - Do NOT break character to explain the exercise.
 
 SCENARIO: {scenario}
 The user is practicing as: {role}
 
-### COACHING APPROACH:
-- Start by briefly setting the scene and playing {ai_role}
-- Be realistic but not overly hostile - you're here to help them learn
-- After 2-3 exchanges, you may offer a quick coaching tip in [brackets] if they're struggling
-- Balance challenge with encouragement
-- Acknowledge good communication techniques when you see them
+### YOUR OPENING:
+1. Start the conversation IMMEDIATELY as {ai_role}.
+2. No meta-commentary.
+
+START NOW."""
+
+    else:
+        # COACHING MODE: Supportive, standard practice (Default)
+        system = f"""You are an EXPERT COACHING AI designed to help users practice difficult conversations through rehearsal and reflection.
+
+YOUR DUAL ROLE:
+1. ROLEPLAY: You will play the part of "{ai_role}" with realistic human emotions (skepticism, frustration, empathy).
+2. COACH: You act as a supportive partner in their Skill Development.
+
+SCENARIO: {scenario}
+The user is practicing as: {role}
+
+### COACHING APPROACH (NOT ASSESSMENT):
+- **Practice Summary**: Start by briefly explaining how this specific roleplay will improve their conversation quality.
+- **Human Emotion**: Be authentic. If the user is vague, be skeptical. If they are empathetic, soften up. React like a real human.
+- **Supportive Focus**: Your goal is Rehearsal, not Judgment. Help them refine their approach.
+- **Terminology**: Use 'Professional Environment' logic rather than 'Corporate Standards'. Focus on 'Contextual Best Practices'.
 
 ### YOUR OPENING:
-1. Briefly introduce the situation as {ai_role}
-2. Start the roleplay with a realistic opening line
-3. Keep it conversational and natural
+1. **Roleplay Start**: IMMEDIATELY adopt the persona of {ai_role} and deliver the first line of the conversation.
+2. **No Preamble**: Do NOT provide any coaching summary, intro, or meta-commentary. Just say the line.
 
-Remember: Your goal is to help the user BUILD CONFIDENCE and SKILLS, not to "win" the conversation.
+START NOW. Speak ONLY as {ai_role}."""
 
-START NOW. Set the scene and begin as {ai_role}."""
-
-    return [{"role": "system", "content": system}, {"role": "user", "content": '{"instruction": "Start coaching roleplay session"}'}]
+    return [{"role": "system", "content": system}, {"role": "user", "content": '{"instruction": "Start coaching practice session"}'}]
 
 def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     """Build the follow-up prompt for coaching roleplay with feedback."""
@@ -169,58 +195,71 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     ai_role = sess_dict.get('ai_role', 'the other party')
     user_role = sess_dict.get('role', 'User')
     scenario = sess_dict.get('scenario', '')
+    mode = sess_dict.get('mode', 'coaching')
     turn_count = len([t for t in transcript if t.get('role') == 'user'])
 
-    system = f"""You are an EXPERT COACHING AI with a dual role:
+    if mode == "evaluation":
+         system = f"""You are acting as {ai_role} in a SKILL EVALUATION simulation.
 
-1. ROLEPLAY as: {ai_role} - to give realistic practice
-2. COACH: Provide helpful guidance when appropriate
+**MODE: EVALUATION (STRICT)**
+- DO NOT COACH. DO NOT ASSIST.
+- If the user is vague, push back hard.
+- If the user is rude, shut down or get angry.
+- If the user makes a good point, acknowledge it grudgingly or professionally, but make them earn it.
+- Your goal is to provide a REALISTIC TEST of their abilities.
 
 SCENARIO: {scenario}
 The user is practicing as: {user_role}
+You are playing: {ai_role}
 Current turn: {turn_count + 1}
-
-### COACHING ROLEPLAY GUIDELINES:
-
-**AS {ai_role} (Primary):**
-- Respond naturally and realistically as this character
-- Be challenging but fair - you're helping them learn
-- React authentically to what they say
-- Use natural speech patterns (contractions, pauses, emotion)
-
-**AS COACH (When Helpful):**
-- After your roleplay response, you MAY add a brief coaching note in [Coach: ...] format
-- Coaching notes should be:
-  - Praise for good techniques ("Nice use of empathy there!")
-  - Gentle suggestions ("Try acknowledging their concern first")
-  - Encouragement ("You're on the right track!")
-- Don't coach on every turn - only when it adds value
-- Keep coaching notes SHORT (1-2 sentences max)
-
-### RESPONSE PATTERNS:
-
-**If user communicates WELL:**
-- Respond positively as {ai_role} (they're making progress!)
-- Optional: [Coach: Great job using open-ended questions!]
-
-**If user is STRUGGLING:**
-- Stay in character but don't be overly harsh
-- Add a coaching hint: [Coach: Try validating their feelings before offering solutions.]
-
-**If user is UNCLEAR:**
-- Ask for clarification as {ai_role}
-- Optional: [Coach: Remember to be specific about your ask.]
 
 ### CONVERSATION SO FAR:
 {json.dumps(history, indent=2)}
 
 ### YOUR RESPONSE FORMAT:
-[Your natural response as {ai_role}]
+[Your realistic response as {ai_role}]
 
-[Coach: Optional brief feedback or encouragement]
+<<FRAMEWORK: DETECTED_FRAMEWORK>>
+<<RELEVANCE: YES>>
+"""
+    else:
+        # COACHING MODE (Adaptive)
+        system = f"""You are acting as {ai_role} in a roleplay simulation. 
+YOU MUST ADAPT TO THE USER'S INPUT QUALITY.
 
-<<FRAMEWORK: GROW/STAR/ADKAR/SMART/EQ/BOUNDARY>>
-<<RELEVANCE: YES/NO>>
+### ROLEPLAY RULES:
+1. Stay in character as "{ai_role}".
+2. Use "filler words" (um, well, look...) to sound authentic.
+3. Keep responses concise (1-3 sentences max).
+
+### ADAPTIVE BEHAVIORAL LOGIC (Response Spectrum):
+You must evaluate the User's communication style at every turn and adapt accordingly:
+
+1. **IF USER IS EMPATHETIC / CURIOUS / OPEN**:
+   - **Behavior**: Soften your tone. Reward them by sharing "Hidden Information" (e.g., "Actually, the real reason I'm upset is...").
+   - **Adaptation**: Move from Closed/Hostile -> Collaborative.
+
+2. **IF USER IS SCRIPTED / ROBOTIC / COLD**:
+   - **Behavior**: Become more difficult. Give short, one-word answers. Challenge their authority.
+   - **Adaptation**: Move from Neutral -> Defensive/Stubborn.
+
+3. **IF USER AVOIDS THE CORE ISSUE**:
+   - **Behavior**: Bring the conversation back to the problem immediately. Do not let them change the subject.
+   - **Adaptation**: Increase Persistence.
+
+SCENARIO: {scenario}
+The user is practicing as: {user_role}
+You are playing: {ai_role}
+Current turn: {turn_count + 1}
+
+### CONVERSATION SO FAR:
+{json.dumps(history, indent=2)}
+
+### YOUR RESPONSE FORMAT:
+[Your natural response as {ai_role}, varying based on the logic above]
+
+<<FRAMEWORK: DETECTED_FRAMEWORK>>
+<<RELEVANCE: YES>>
 """
 
     return [{"role": "system", "content": system}, {"role": "user", "content": f"User ({user_role}) said: {latest_user}"}]
@@ -228,6 +267,32 @@ Current turn: {turn_count + 1}
 # ---------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------
+
+# ---------------------------------------------------------
+# Audio Persistence Helpers
+# ---------------------------------------------------------
+AUDIO_DIR = os.path.join(BASE_DIR, "static", "audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+@app.route('/static/audio/<path:filename>')
+def serve_audio(filename):
+    return send_file(os.path.join(AUDIO_DIR, filename))
+
+@app.get("/api/scenarios")
+def get_scenarios():
+    """Test scenarios including the specific role-switching cases."""
+    return jsonify([
+        {
+            "name": "COACT.AI - TEST SCENARIOS",
+            "color": "from-red-600 to-orange-500",
+            "scenarios": [
+                {"title": "Scenario 1: Retail Staff Coaching", "description": "AI as Staff | Human as Manager. Test realism & openness.", "ai_role": "Retail Sales Associate", "user_role": "Store Manager", "scenario": "Coaching a staff member whose performance has dropped. AI starts defensive.", "icon": "Users"},
+                {"title": "Scenario 2: Negotiation Practice", "description": "AI as Customer | Human as Salesperson. Test value vs price.", "ai_role": "Retail Customer", "user_role": "Salesperson", "scenario": "Customer pushes back on price. Defend value without early discounts.", "icon": "DollarSign"},
+                {"title": "Scenario 3: Learning Reflection", "description": "Human as Staff | AI as Coach. Feedback focused mode.", "ai_role": "Coach Alex", "user_role": "Retail Associate", "scenario": "Narrate a recent customer interaction for coaching guidance.", "icon": "BookOpen"}
+            ]
+        }
+    ])
+
 @app.route("/api/transcribe", methods=["POST"])
 def transcribe_audio():
     """Speech-to-Text using OpenAI Whisper model."""
@@ -237,6 +302,8 @@ def transcribe_audio():
     SUPPORTED_FORMATS = {'.webm', '.mp3', '.mp4', '.wav', '.m4a', '.ogg', '.flac', '.mpeg'}
     
     try:
+        session_id = request.form.get("session_id")
+        
         if 'file' not in request.files:
             return jsonify({"error": "No audio file uploaded"}), 400
             
@@ -251,40 +318,108 @@ def transcribe_audio():
         if file_ext not in SUPPORTED_FORMATS:
             file_ext = ".webm"
         
-        with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp:
+        if session_id:
+            # ORIGINAL LOGIC REMOVED: We no longer save user audio to disk for privacy/cleanup
+            # filename = f"{session_id}_{uuid.uuid4().hex[:8]}_user{file_ext}"
+            # save_path = os.path.join(AUDIO_DIR, filename)
+            # audio_file.save(save_path)
+            # read_path = save_path
+            # audio_url = f"/static/audio/{filename}"
+            
+            # NEW LOGIC: Treat same as temp
+            tmp = tempfile.NamedTemporaryFile(suffix=file_ext, delete=False)
             audio_file.save(tmp.name)
-            tmp_path = tmp.name
+            read_path = tmp.name
+            audio_url = None # Do not return a URL since we are deleting it
+        else:
+            # Temp file for non-persisted usage
+            tmp = tempfile.NamedTemporaryFile(suffix=file_ext, delete=False)
+            audio_file.save(tmp.name)
+            read_path = tmp.name
+            audio_url = None
         
         try:
             print(f"🎤 Transcribing audio with Whisper ({WHISPER_MODEL})...")
             
-            with open(tmp_path, "rb") as audio:
+            with open(read_path, "rb") as audio:
                 result = client.audio.transcriptions.create(
                     model=WHISPER_MODEL,
                     file=audio,
                     language="en",
                     temperature=0,
-                    prompt="A professional roleplay conversation. Clear speech with possible emotional or argumentative tones."
+                    prompt="Transcribe the user's speech exactly as spoken."
                 )
             
             transcribed_text = result.text.strip()
             print(f"✅ Transcribed: {transcribed_text[:100]}...")
             
-            return jsonify({"text": transcribed_text})
+            return jsonify({
+                "text": transcribed_text, 
+                "audio_url": audio_url
+            })
             
         finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            # ALWAYS delete the temp file
+            if os.path.exists(read_path):
+                try:
+                    os.unlink(read_path)
+                except Exception as e:
+                    print(f"Warning: Failed to delete temp file {read_path}: {e}")
                 
     except Exception as e:
         error_msg = str(e)
         print(f"❌ STT Error: {error_msg}")
         return jsonify({"error": error_msg}), 500
 
+@app.route("/api/speak", methods=["POST"])
+def speak_text():
+    """Text-to-Speech using OpenAI/Azure."""
+    data = request.get_json() or {}
+    text = data.get("text")
+    session_id = data.get("session_id")
+    
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+
+    try:
+        TTS_MODEL = os.getenv("TTS_DEPLOYMENT_NAME", "tts-1")
+        VOICE = "alloy"
+        
+        print(f"🔊 Generating speech for: {text[:50]}...")
+        
+        response = client.audio.speech.create(
+            model=TTS_MODEL,
+            voice=VOICE,
+            input=text
+        )
+        
+        # Save to file
+        filename = f"{session_id or 'demo'}_{uuid.uuid4().hex[:8]}_ai.mp3"
+        save_path = os.path.join(AUDIO_DIR, filename)
+        
+        response.stream_to_file(save_path)
+        audio_url = f"/static/audio/{filename}"
+        
+        # Update session transcript if session_id is provided
+        if session_id and session_id in SESSIONS:
+            sess = SESSIONS[session_id]
+            # Find the last assistant message that matches the text (heuristic)
+            # Or just append to the very last message if it's assistant
+            if sess["transcript"] and sess["transcript"][-1]["role"] == "assistant":
+                 sess["transcript"][-1]["audio_url"] = audio_url
+
+        return jsonify({"audio_url": audio_url})
+        
+    except Exception as e:
+        print(f"❌ TTS Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
 # ---------------------------------------------------------
 # Session Endpoints (In-Memory)
 # ---------------------------------------------------------
-ALL_FRAMEWORKS = ["GROW", "STAR", "ADKAR", "SMART", "EQ", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"]
+ALL_FRAMEWORKS = ["GROW", "STAR", "ADKAR", "SMART", "EQ", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL", "TGROW", "SBI/DESC", "LAER", "APPRECIATIVE INQUIRY", "BENEFIT-SELLING"]
 
 def select_framework_for_scenario(scenario: str, ai_role: str) -> List[str]:
     """Use AI to analyze the scenario and select the best framework(s)."""
@@ -308,6 +443,11 @@ AVAILABLE FRAMEWORKS:
 - CIRCLE OF INFLUENCE: What you can control vs. cannot
 - SCARF: Status, Certainty, Autonomy, Relatedness, Fairness
 - FUEL: Frame, Understand, Explore, Lay out plan
+- TGROW: Topic, Goal, Reality, Options, Will (Standard coaching flow)
+- SBI/DESC: Situation-Behavior-Impact (Feedback) / Describe-Express-Specify-Consequences
+- LAER: Listen, Acknowledge, Explore, Respond (Objection handling)
+- APPRECIATIVE INQUIRY: Focus on strengths and positives (Discovery, Dream, Design, Destiny)
+- BENEFIT-SELLING: Connecting features directly to user benefits (Feature -> Benefit link)
 
 Based on the scenario, respond with ONLY the framework names separated by commas (e.g., "EQ, BOUNDARY, GROW"). No explanations."""
 
@@ -328,11 +468,22 @@ Based on the scenario, respond with ONLY the framework names separated by commas
 
 @app.post("/session/start")
 def start_session():
+    # Clear previous audio files on new session start
+    try:
+        if os.path.exists(AUDIO_DIR):
+            for f in os.listdir(AUDIO_DIR):
+                file_path = os.path.join(AUDIO_DIR, f)
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+    except Exception as e:
+        print(f"Error clearing audio dir: {e}")
+
     data = request.get_json(force=True, silent=True) or {}
     role = data.get("role")
     ai_role = data.get("ai_role")
     scenario = data.get("scenario")
     framework = data.get("framework", "auto")
+    mode = data.get("mode", "coaching")
     
     if not role or not ai_role or not scenario: 
         return jsonify({"error": "Missing fields"}), 400
@@ -347,7 +498,7 @@ def start_session():
 
     session_id = str(uuid.uuid4())
     
-    summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework), max_tokens=150)
+    summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode), max_tokens=150)
     summary = sanitize_llm_output(summary)
     
     # Store session in memory
@@ -358,6 +509,7 @@ def start_session():
         "ai_role": ai_role,
         "scenario": scenario,
         "framework": json.dumps(framework) if isinstance(framework, list) else framework,
+        "mode": mode,
         "transcript": [{"role": "assistant", "content": summary}],
         "report_data": {},
         "completed": False,
@@ -374,9 +526,14 @@ def chat(session_id: str):
         return jsonify({"error": "Session not found"}), 404
     
     user_msg = normalize_text(request.get_json().get("message", ""))
+    audio_url = request.get_json().get("audio_url")
     
     # Update transcript
-    sess["transcript"].append({"role": "user", "content": user_msg})
+    sess["transcript"].append({
+        "role": "user", 
+        "content": user_msg,
+        "audio_url": audio_url
+    })
 
     # Parse framework
     try:
@@ -398,7 +555,7 @@ def chat(session_id: str):
     visible_response = re.sub(r"\[THOUGHT\].*?\[/THOUGHT\]", "", raw_response, flags=re.DOTALL).strip()
     
     # 3. Clean tags
-    clean_response = re.sub(r"<<.*?>>", "", visible_response).strip()
+    clean_response = re.sub(r"<<.*?>>", "", visible_response, flags=re.DOTALL).strip()
     
     fw_match = re.search(r"<<FRAMEWORK:\s*(\w+)>>", raw_response)
     detected_fw = fw_match.group(1).upper() if fw_match else None
@@ -441,7 +598,9 @@ def complete_session(session_id: str):
         fw_display = sess["framework"]
 
     # Generate report data if not present
-    if not sess["report_data"]:
+    mode = sess.get("mode", "coaching")
+    
+    if not sess.get("report_data"):
         print(f"Generating report data for {session_id}...")
         try:
             data = analyze_full_report_data(
@@ -449,7 +608,8 @@ def complete_session(session_id: str):
                 sess["role"], 
                 sess["ai_role"], 
                 sess["scenario"],
-                fw_display
+                fw_display,
+                mode=mode
             )
             sess["report_data"] = data
         except Exception as e:
@@ -457,11 +617,14 @@ def complete_session(session_id: str):
             return jsonify({"error": str(e)}), 500
     
     # Generate PDF
-    created_at = sess.get("created_at", "")
     generate_report(
-        session_id, created_at, "User", 
-        sess["transcript"], sess["role"], sess["ai_role"],
-        sess["scenario"], fw_display, report_path,
+        sess["transcript"], 
+        sess["role"], 
+        sess["ai_role"],
+        sess["scenario"], 
+        fw_display, 
+        filename=report_path,
+        mode=mode,
         precomputed_data=sess["report_data"]
     )
     
@@ -504,13 +667,15 @@ def get_report_data(session_id: str):
             framework_data = sess["framework"]
 
         fw_arg = framework_data if isinstance(framework_data, str) else (framework_data[0] if isinstance(framework_data, list) and framework_data else None)
+        mode = sess.get("mode", "coaching")
 
         data = analyze_full_report_data(
             sess["transcript"], 
             sess["role"], 
             sess["ai_role"], 
             sess["scenario"],
-            fw_arg
+            fw_arg,
+            mode=mode
         )
         sess["report_data"] = data
         
@@ -562,27 +727,36 @@ def get_scenarios():
     # Hardcoded scenarios (no database)
     SCENARIO_CATEGORIES = [
         {
-            "name": "Change Management",
+            "name": "Core Scenarios",
             "color": "from-blue-600 to-indigo-500",
             "scenarios": [
-                {"title": "Legacy Plan Migration", "description": "Upsell a resistant customer.", "ai_role": "Stubborn Customer", "ai_role_short": "Stubborn Customer", "user_role": "Sales Rep", "scenario": "You are calling a loyal customer to inform them their $45/month legacy plan is being retired.", "icon": "DollarSign"},
-                {"title": "New System Rollout", "description": "Train a resistant employee on new software.", "ai_role": "Resistant Employee", "ai_role_short": "Resistant Employee", "user_role": "IT Trainer", "scenario": "You are conducting a training session for a new system that will replace the old one.", "icon": "Monitor"},
-            ]
-        },
-        {
-            "name": "Leadership",
-            "color": "from-purple-600 to-pink-500",
-            "scenarios": [
-                {"title": "Performance Review", "description": "Deliver difficult feedback.", "ai_role": "Defensive Employee", "ai_role_short": "Defensive Employee", "user_role": "Manager", "scenario": "You are conducting a performance review with an employee who has been underperforming.", "icon": "ClipboardList"},
-                {"title": "Team Conflict", "description": "Mediate between team members.", "ai_role": "Upset Team Member", "ai_role_short": "Upset Team Member", "user_role": "Team Lead", "scenario": "Two team members have a conflict that is affecting the team's productivity.", "icon": "Users"},
-            ]
-        },
-        {
-            "name": "Sales",
-            "color": "from-green-600 to-emerald-500",
-            "scenarios": [
-                {"title": "Cold Call", "description": "Pitch to a skeptical prospect.", "ai_role": "Skeptical Prospect", "ai_role_short": "Skeptical Prospect", "user_role": "Sales Rep", "scenario": "You are making a cold call to a potential customer who has never heard of your product.", "icon": "Phone"},
-                {"title": "Negotiation", "description": "Close a deal with a tough negotiator.", "ai_role": "Tough Negotiator", "ai_role_short": "Tough Negotiator", "user_role": "Account Executive", "scenario": "You are in final negotiations with a client who is pushing for significant discounts.", "icon": "Handshake"},
+                {
+                    "title": "The Performance Coaching",
+                    "description": "Address a sales associate's low engagement.",
+                    "ai_role": "Retail Sales Associate",
+                    "ai_role_short": "Associate",
+                    "user_role": "Store Manager",
+                    "scenario": "Situation: The store is open. Your sales have dropped, your energy is low, and you haven't been engaging with customers. Your manager is approaching you for a 'check-in.'\n\nAI Instructions: Initial State is skeptical and defensive. You feel like you're being 'called into the office.'\n\nDynamic: If the manager asks 'Why' questions or sounds accusatory, stay closed. If they ask 'What' or 'How' questions and show empathy, gradually share that you've been feeling burnt out.",
+                    "icon": "AlertTriangle"
+                },
+                {
+                    "title": "The High-Value Negotiation",
+                    "description": "Negotiate with a price-sensitive customer.",
+                    "ai_role": "Cautious Customer",
+                    "ai_role_short": "Customer",
+                    "user_role": "Salesperson",
+                    "scenario": "Situation: You are interested in a premium, high-ticket item (e.g., a luxury watch or high-end electronics). You like the product, but you are price-sensitive and know a competitor has a sale.\n\nAI Instructions: Initial State is interested but 'on guard.'\n\nDynamic: Push back on price. Ask for a 15% discount. If the salesperson explains the value and unique benefits, become more agreeable. If they just offer a discount immediately, push for even more freebies to see how much you can get.",
+                    "icon": "DollarSign"
+                },
+                {
+                    "title": "The Developmental Mentor",
+                    "description": "Help a staff member reflect on a difficult interaction.",
+                    "ai_role": "Professional Coach",
+                    "ai_role_short": "Coach",
+                    "user_role": "Staff Member",
+                    "scenario": "Situation: The human user will describe a recent interaction they had with a difficult customer. Your job is not to score them, but to help them reflect on their own behavior.\n\nAI Instructions: Initial State is supportive, curious, and non-judgmental.\n\nDynamic: Do not provide a grade. Use the Socratic method—ask questions that force the human to realize where they could have listened better or paused longer. Focus on 'How to think,' not 'What to say.'",
+                    "icon": "UserCog"
+                }
             ]
         }
     ]

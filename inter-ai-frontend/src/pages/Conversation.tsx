@@ -76,43 +76,32 @@ export default function Conversation() {
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 
+    // State for user's uploaded audio URL
+    const [lastAudioUrl, setLastAudioUrl] = useState<string | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
 
-    const speakText = async (text: string) => {
-        // Stop any current audio
-        if (audioRef.current) {
-            audioRef.current.pause()
-            audioRef.current = null
-        }
+    const speakText = (text: string) => {
+        if (!('speechSynthesis' in window)) return
+
         window.speechSynthesis.cancel()
 
-        try {
-            setIsAiSpeaking(true)
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.rate = 1.0
+        utterance.pitch = 1.0
 
-            // Use browser's built-in text-to-speech (Whisper is only for STT)
-            const speech = new SpeechSynthesisUtterance(text)
-            speech.rate = 1.0
-            speech.pitch = 1.0
-            speech.volume = 1.0
+        // Try to pick a natural sounding voice if available
+        const voices = window.speechSynthesis.getVoices()
+        const preferredVoice = voices.find(v => v.name.includes('Google US English'))
+            || voices.find(v => v.name.includes('Microsoft Zira'))
+            || voices.find(v => v.lang.startsWith('en'))
 
-            // Try to get a good English voice
-            const voices = window.speechSynthesis.getVoices()
-            const preferredVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google'))
-                || voices.find(v => v.lang.startsWith('en') && v.name.includes('Microsoft'))
-                || voices.find(v => v.lang.startsWith('en'))
-            if (preferredVoice) {
-                speech.voice = preferredVoice
-            }
+        if (preferredVoice) utterance.voice = preferredVoice
 
-            speech.onend = () => setIsAiSpeaking(false)
-            speech.onerror = () => setIsAiSpeaking(false)
+        utterance.onstart = () => setIsAiSpeaking(true)
+        utterance.onend = () => setIsAiSpeaking(false)
+        utterance.onerror = () => setIsAiSpeaking(false)
 
-            window.speechSynthesis.speak(speech)
-
-        } catch (error) {
-            console.error("TTS Error:", error)
-            setIsAiSpeaking(false)
-        }
+        window.speechSynthesis.speak(utterance)
     }
 
     useEffect(() => {
@@ -133,8 +122,11 @@ export default function Conversation() {
                 transcript: initialTranscript as TranscriptMessage[],
             }))
 
+            // Only speak if it's a fresh load of a new session? 
+            // Or maybe don't auto-speak on reload to avoid annoyance.
+            // keeping original logic:
             const latestMsg = initialTranscript[initialTranscript.length - 1]
-            if (latestMsg.role === 'assistant') {
+            if (latestMsg.role === 'assistant' && initialTranscript.length === 1) {
                 const timer = setTimeout(() => {
                     speakText(latestMsg.content)
                 }, 500)
@@ -145,8 +137,9 @@ export default function Conversation() {
 
     useEffect(() => {
         return () => {
-            if ("speechSynthesis" in window) {
-                window.speechSynthesis.cancel()
+            if (audioRef.current) {
+                audioRef.current.pause()
+                audioRef.current = null
             }
             if (recognitionRef.current) {
                 recognitionRef.current.stop()
@@ -193,10 +186,11 @@ export default function Conversation() {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
 
                 try {
-                    setState(prev => ({ ...prev, isProcessing: true, interimText: "Transcribing with Whisper..." }))
+                    setState(prev => ({ ...prev, isProcessing: true, interimText: "Transcribing..." }))
 
                     const formData = new FormData()
                     formData.append('file', audioBlob, 'audio.webm')
+                    if (sessionId) formData.append('session_id', sessionId)
 
                     const response = await fetch(getApiUrl('/api/transcribe'), {
                         method: 'POST',
@@ -207,6 +201,10 @@ export default function Conversation() {
 
                     const data = await response.json()
                     const transcribedText = data.text?.trim()
+
+                    if (data.audio_url) {
+                        setLastAudioUrl(data.audio_url)
+                    }
 
                     if (transcribedText) {
                         setState(prev => ({
@@ -262,8 +260,14 @@ export default function Conversation() {
             const response = await fetch(getApiUrl(`/api/session/${sessionId}/chat`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message })
+                body: JSON.stringify({
+                    message,
+                    audio_url: lastAudioUrl // Send the audio we just saved
+                })
             })
+
+            // Reset audio url for next turn
+            setLastAudioUrl(null)
 
             if (!response.ok) {
                 throw new Error("Failed to get AI response")
@@ -281,7 +285,7 @@ export default function Conversation() {
 
             speakText(aiResponse)
 
-            // Update local storage for offline reference
+            // Update local storage
             if (state.sessionData) {
                 const updated = {
                     ...state.sessionData,
