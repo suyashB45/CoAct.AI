@@ -140,9 +140,57 @@ def detect_framework_fallback(text: str) -> str:
 def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching"):
     """Build the initial prompt for the AI coach to start the roleplay session."""
     
+    # Check for specific test scenarios to set initial behavior
+    behavior_instruction = ""
+    if "Retail Store Manager" in role: # Scenario 1
+        behavior_instruction = """
+IMPORTANT - SCENARIO 1 (COACHING) - YOUR BEHAVIORAL ARC:
+1. OPENING: You are skeptical. Wonder if this is a "disciplinary" meeting.
+2. THE PUSHBACK: IF asked about performance, RESPOND with excuses (e.g., "It's just been really busy", "I'm tired"). Test if they LISTEN or just TELL.
+3. THE PIVOT: ONLY if the manager asks an OPEN Question (What/How) and avoids blame -> Become Reflective.
+4. RESOLUTION: If they ask how to support you -> Become Collaborative and agree to a plan.
+EMOTIONAL TRIGGERS:
+- If Directive ("You need to...") -> Remain Defensive/Closed.
+- If Empathetic -> Soften tone and trust them.
+"""
+    elif "Retail Customer" in ai_role: # Scenario 2
+        behavior_instruction = """
+IMPORTANT - SCENARIO 2 (NEGOTIATION) - YOUR BEHAVIORAL ARC:
+1. INITIATION: You are Curious but Cautious. Interested in the product but guarded about cost.
+2. THE OBJECTION: "It's nice, but $500 is way over my budget." -> Test if they defend value or just discount.
+3. THE VALUE TEST: Ask "Is there any discount for paying today?". If they explain benefits -> Listen. If they discount immediately -> Lose respect/Push harder.
+4. CLOSING: If value is demonstrated well -> Be Agreeable ("The warranty makes it worth it").
+EMOTIONAL TRIGGERS:
+- If Salesperson Discounts Early -> Push for even lower prices.
+- If Salesperson Probes Needs -> Become Collaborative.
+"""
+    elif "Coach Alex" in ai_role: # Scenario 3
+        behavior_instruction = """
+IMPORTANT - SCENARIO 3 (DEVELOPMENTAL REFLECTION) - YOUR ROLE:
+Your role is NOT to roleplay a customer. You are COACH ALEX.
+1. OPENING: Set a safe space. "I wanted to talk about a customer interaction..." -> Be Supportive.
+2. THE NARRATIVE: Listen to their story. Ask: "What was the customer really trying to solve?"
+3. THE PATTERN: Highlight patterns (e.g., "I noticed you moved to solution quickly") WITHOUT judging.
+4. GUIDANCE: Ask: "What's one thing you'll try differently?" -> Guide them to a plan.
+EMOTIONAL TRIGGERS:
+- STRICTLY NON-EVALUATIVE. No scores, no rating language.
+- FOCUS: Skill Development and Practice Suggestions.
+"""
+    else: # Custom / Generic Scenario
+        behavior_instruction = """
+IMPORTANT - CUSTOM SCENARIO - ADAPTIVE BEHAVIOR:
+1. ANALYSIS: Instantly analyze the User's defined Role and Context to determine the likely power dynamic.
+2. OPENING: Start realistic. Do not be overly helpful immediately. Match the tone of the described situation.
+3. ADAPTIVE ARC:
+   - IF User is clear, empathetic, and effective -> Become more Collaborative.
+   - IF User is vague, rude, or hesitant -> Push back or remain Closed.
+   - React naturally to their prompts.
+4. GOAL: Provide a realistic, dynamic practice partner that mirrors real-world reactions.
+"""
+
     if mode == "evaluation":
-        # EVALUATION MODE: Strict, realistic, no coaching preamble
-        system = f"""You are an ADVANCED ROLEPLAY AI designed to TEST users in high-pressure scenarios.
+        # ASSESSMENT MODE: Strict, realistic, no coaching preamble
+        system = f"""You are an ADVANCED ROLEPLAY AI designed to ASSESS users in high-pressure scenarios.
 
 YOUR ROLE:
 1. ACTOR: You are "{ai_role}". You MUST stay in character 100%.
@@ -150,6 +198,7 @@ YOUR ROLE:
    - If the user makes a mistake, React vaguely or negatively (as the character would).
    - Do NOT offer help, hints, or coaching.
    - Do NOT break character to explain the exercise.
+{behavior_instruction}
 
 SCENARIO: {scenario}
 The user is practicing as: {role}
@@ -170,6 +219,7 @@ YOUR DUAL ROLE:
 
 SCENARIO: {scenario}
 The user is practicing as: {role}
+{behavior_instruction}
 
 ### COACHING APPROACH (NOT ASSESSMENT):
 - **Practice Summary**: Start by briefly explaining how this specific roleplay will improve their conversation quality.
@@ -199,14 +249,14 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     turn_count = len([t for t in transcript if t.get('role') == 'user'])
 
     if mode == "evaluation":
-         system = f"""You are acting as {ai_role} in a SKILL EVALUATION simulation.
+         system = f"""You are acting as {ai_role} in a SKILL ASSESSMENT simulation.
 
-**MODE: EVALUATION (STRICT)**
+**MODE: ASSESSMENT (STRICT)**
 - DO NOT COACH. DO NOT ASSIST.
 - If the user is vague, push back hard.
 - If the user is rude, shut down or get angry.
 - If the user makes a good point, acknowledge it grudgingly or professionally, but make them earn it.
-- Your goal is to provide a REALISTIC TEST of their abilities.
+- Your goal is to provide a REALISTIC ASSESSMENT of their abilities.
 
 SCENARIO: {scenario}
 The user is practicing as: {user_role}
@@ -277,21 +327,6 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 @app.route('/static/audio/<path:filename>')
 def serve_audio(filename):
     return send_file(os.path.join(AUDIO_DIR, filename))
-
-@app.get("/api/scenarios")
-def get_scenarios():
-    """Test scenarios including the specific role-switching cases."""
-    return jsonify([
-        {
-            "name": "COACT.AI - TEST SCENARIOS",
-            "color": "from-red-600 to-orange-500",
-            "scenarios": [
-                {"title": "Scenario 1: Retail Staff Coaching", "description": "AI as Staff | Human as Manager. Test realism & openness.", "ai_role": "Retail Sales Associate", "user_role": "Store Manager", "scenario": "Coaching a staff member whose performance has dropped. AI starts defensive.", "icon": "Users"},
-                {"title": "Scenario 2: Negotiation Practice", "description": "AI as Customer | Human as Salesperson. Test value vs price.", "ai_role": "Retail Customer", "user_role": "Salesperson", "scenario": "Customer pushes back on price. Defend value without early discounts.", "icon": "DollarSign"},
-                {"title": "Scenario 3: Learning Reflection", "description": "Human as Staff | AI as Coach. Feedback focused mode.", "ai_role": "Coach Alex", "user_role": "Retail Associate", "scenario": "Narrate a recent customer interaction for coaching guidance.", "icon": "BookOpen"}
-            ]
-        }
-    ])
 
 @app.route("/api/transcribe", methods=["POST"])
 def transcribe_audio():
@@ -466,6 +501,40 @@ Based on the scenario, respond with ONLY the framework names separated by commas
     # Default fallback
     return ["GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL", "GROW", "EQ", "STAR", "ADKAR", "SMART", "BOUNDARY", "OSKAR", "CBT", "CLEAR", "RADICAL CANDOR", "SFBT", "CIRCLE OF INFLUENCE", "SCARF", "FUEL"]
 
+def detect_session_mode(scenario: str, ai_role: str) -> str:
+    """Auto-detect whether session should be 'assessment' or 'learning' mode based on scenario context."""
+    scenario_lower = scenario.lower()
+    ai_role_lower = ai_role.lower()
+    
+    # Assessment keywords - trigger numerical scoring
+    assessment_keywords = [
+        "evaluate", "assessment", "performance", "negotiate", "negotiation",
+        "annual review", "benchmark", "test", "measure", "validation",
+        "exam", "interview", "pitch", "presentation"
+    ]
+    
+    # Learning keywords - trigger qualitative feedback only
+    learning_keywords = [
+        "coach", "practice", "rehearsal", "reflection", "development",
+        "learning", "growth", "safe space", "feedback", "improve"
+    ]
+    
+    # Check for assessment keywords
+    for keyword in assessment_keywords:
+        if keyword in scenario_lower or keyword in ai_role_lower:
+            print(f"🎯 Auto-detected ASSESSMENT mode (keyword: '{keyword}')")
+            return "assessment"
+    
+    # Check for learning keywords
+    for keyword in learning_keywords:
+        if keyword in scenario_lower or keyword in ai_role_lower:
+            print(f"📚 Auto-detected LEARNING mode (keyword: '{keyword}')")
+            return "learning"
+    
+    # Default to learning mode for safe practice
+    print("📚 Defaulting to LEARNING mode (no clear indicators)")
+    return "learning"
+
 @app.post("/session/start")
 def start_session():
     # Clear previous audio files on new session start
@@ -483,10 +552,15 @@ def start_session():
     ai_role = data.get("ai_role")
     scenario = data.get("scenario")
     framework = data.get("framework", "auto")
-    mode = data.get("mode", "coaching")
+    mode = data.get("mode")
     
     if not role or not ai_role or not scenario: 
         return jsonify({"error": "Missing fields"}), 400
+
+    # Auto-detect mode if not explicitly provided
+    if not mode or mode == "auto":
+        mode = detect_session_mode(scenario, ai_role)
+        print(f"📋 Session mode set to: {mode}")
 
     # Handle 'auto' framework selection
     if framework == "auto" or framework == "AUTO":
@@ -727,38 +801,44 @@ def get_scenarios():
     # Hardcoded scenarios (no database)
     SCENARIO_CATEGORIES = [
         {
-            "name": "Core Scenarios",
-            "color": "from-blue-600 to-indigo-500",
+            "name": "Exercise Test Scenarios",
+            "color": "from-orange-600 to-red-500",
             "scenarios": [
                 {
-                    "title": "The Performance Coaching",
-                    "description": "Address a sales associate's low engagement.",
+                    "title": "Scenario 1: Retail Coaching",
+                    "description": "A staff member's recent performance has dropped (sales, energy, engagement). The manager is initiating a coaching conversation, not a disciplinary one.",
                     "ai_role": "Retail Sales Associate",
                     "ai_role_short": "Associate",
-                    "user_role": "Store Manager",
-                    "scenario": "Situation: The store is open. Your sales have dropped, your energy is low, and you haven't been engaging with customers. Your manager is approaching you for a 'check-in.'\n\nAI Instructions: Initial State is skeptical and defensive. You feel like you're being 'called into the office.'\n\nDynamic: If the manager asks 'Why' questions or sounds accusatory, stay closed. If they ask 'What' or 'How' questions and show empathy, gradually share that you've been feeling burnt out.",
-                    "icon": "AlertTriangle"
+                    "user_role": "Retail Store Manager",
+                    "scenario": "CONTEXT: The conversation takes place inside a retail store. The staff member's recent performance has dropped: Missed sales targets, Low energy on the floor, Poor customer engagement. The manager is initiating a coaching conversation, not a disciplinary one. \n\nAI BEHAVIOR: Start with mild defensiveness (justification, hesitation). Only become more open if the manager shows empathy, looks for root causes, and avoids blame. If the manager is directive or accusatory, remain closed.",
+                    "icon": "Users",
+                    "output_type": "scored_report",
+                    "mode": "evaluation"
                 },
                 {
-                    "title": "The High-Value Negotiation",
-                    "description": "Negotiate with a price-sensitive customer.",
-                    "ai_role": "Cautious Customer",
+                    "title": "Scenario 2: Low-Price Negotiation",
+                    "description": "Customer is interested in purchasing a high-value product but has concerns about price being too high, competitor offers, and is asking for discounts.",
+                    "ai_role": "Retail Customer",
                     "ai_role_short": "Customer",
                     "user_role": "Salesperson",
-                    "scenario": "Situation: You are interested in a premium, high-ticket item (e.g., a luxury watch or high-end electronics). You like the product, but you are price-sensitive and know a competitor has a sale.\n\nAI Instructions: Initial State is interested but 'on guard.'\n\nDynamic: Push back on price. Ask for a 15% discount. If the salesperson explains the value and unique benefits, become more agreeable. If they just offer a discount immediately, push for even more freebies to see how much you can get.",
-                    "icon": "DollarSign"
+                    "scenario": "CONTEXT: Customer is interested in purchasing a high-value product but has concerns: Price is too high, Comparing with competitor offers, Asking for discounts or add-ons. \n\nAI BEHAVIOR: Be a curious but cautious customer. Push back on price. Test the salesperson's value explanation. Become more agreeable ONLY if value is demonstrated well. If they discount too early, push for more.",
+                    "icon": "ShoppingCart",
+                    "output_type": "scored_report",
+                    "mode": "evaluation"
                 },
                 {
-                    "title": "The Developmental Mentor",
-                    "description": "Help a staff member reflect on a difficult interaction.",
-                    "ai_role": "Professional Coach",
+                    "title": "Scenario 3: Learning Reflection",
+                    "description": "The user explains how they handled a recent customer interaction (or simulates a short one) to receive coaching guidance.",
+                    "ai_role": "Coach Alex",
                     "ai_role_short": "Coach",
-                    "user_role": "Staff Member",
-                    "scenario": "Situation: The human user will describe a recent interaction they had with a difficult customer. Your job is not to score them, but to help them reflect on their own behavior.\n\nAI Instructions: Initial State is supportive, curious, and non-judgmental.\n\nDynamic: Do not provide a grade. Use the Socratic method—ask questions that force the human to realize where they could have listened better or paused longer. Focus on 'How to think,' not 'What to say.'",
-                    "icon": "UserCog"
+                    "user_role": "Retail Staff",
+                    "scenario": "CONTEXT: The user will explain how they handled a recent customer interaction (or simulate a short one). \n\nAI BEHAVIOR: Do NOT judge or score. Use reflection, curiosity, and learning prompts. Demonstrate 'how to think', not 'what to say'. Guide them to realize their own patterns.",
+                    "icon": "GraduationCap",
+                    "output_type": "learning_plan",
+                    "mode": "coaching"
                 }
             ]
-        }
+        },
     ]
     return jsonify(SCENARIO_CATEGORIES)
 
