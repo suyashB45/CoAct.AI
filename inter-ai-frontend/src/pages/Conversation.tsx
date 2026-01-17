@@ -80,6 +80,51 @@ export default function Conversation() {
     const [lastAudioUrl, setLastAudioUrl] = useState<string | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
 
+    // Cached voice for consistent experience
+    const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null)
+
+    const getConsistentVoice = () => {
+        if (selectedVoiceRef.current) return selectedVoiceRef.current
+
+        const voices = window.speechSynthesis.getVoices()
+
+        // Prefer male voices for consistency (prioritized order)
+        const maleVoicePreferences = [
+            'Google UK English Male',
+            'Microsoft David',
+            'Microsoft Guy',
+            'Daniel',
+            'Alex',
+            'Google US English',
+            'Microsoft Mark'
+        ]
+
+        let voice = null
+        for (const pref of maleVoicePreferences) {
+            voice = voices.find(v => v.name.includes(pref))
+            if (voice) break
+        }
+
+        // Fallback to any English voice that sounds male (avoid 'Zira', 'Female', 'Woman')
+        if (!voice) {
+            voice = voices.find(v =>
+                v.lang.startsWith('en') &&
+                !v.name.toLowerCase().includes('female') &&
+                !v.name.toLowerCase().includes('zira') &&
+                !v.name.toLowerCase().includes('woman') &&
+                !v.name.toLowerCase().includes('samantha')
+            )
+        }
+
+        // Ultimate fallback - any English voice
+        if (!voice) {
+            voice = voices.find(v => v.lang.startsWith('en'))
+        }
+
+        selectedVoiceRef.current = voice || null
+        return selectedVoiceRef.current
+    }
+
     const speakText = (text: string) => {
         if (!('speechSynthesis' in window)) return
 
@@ -89,13 +134,9 @@ export default function Conversation() {
         utterance.rate = 1.0
         utterance.pitch = 1.0
 
-        // Try to pick a natural sounding voice if available
-        const voices = window.speechSynthesis.getVoices()
-        const preferredVoice = voices.find(v => v.name.includes('Google US English'))
-            || voices.find(v => v.name.includes('Microsoft Zira'))
-            || voices.find(v => v.lang.startsWith('en'))
-
-        if (preferredVoice) utterance.voice = preferredVoice
+        // Use consistent voice
+        const voice = getConsistentVoice()
+        if (voice) utterance.voice = voice
 
         utterance.onstart = () => setIsAiSpeaking(true)
         utterance.onend = () => setIsAiSpeaking(false)
@@ -103,6 +144,21 @@ export default function Conversation() {
 
         window.speechSynthesis.speak(utterance)
     }
+
+    // Load voices when component mounts
+    useEffect(() => {
+        const loadVoices = () => {
+            window.speechSynthesis.getVoices()
+            getConsistentVoice()
+        }
+
+        loadVoices()
+        window.speechSynthesis.onvoiceschanged = loadVoices
+
+        return () => {
+            window.speechSynthesis.onvoiceschanged = null
+        }
+    }, [])
 
     useEffect(() => {
         const storedData = localStorage.getItem(`session_${sessionId}`)
@@ -346,25 +402,25 @@ export default function Conversation() {
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150 mix-blend-overlay"></div>
             </div>
 
-            {/* Header */}
-            <header className="relative z-50 px-6 py-6 flex justify-between items-center">
-                <div className="flex items-center gap-4">
+            {/* Header - Mobile responsive */}
+            <header className="relative z-50 px-3 sm:px-6 py-3 sm:py-6 flex justify-between items-center">
+                <div className="flex items-center gap-2 sm:gap-4">
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => navigate("/practice")}
-                        className="text-white hover:bg-white/10 rounded-full w-10 h-10 border border-white/5 backdrop-blur-md"
+                        className="text-white hover:bg-white/10 rounded-full w-8 h-8 sm:w-10 sm:h-10 border border-white/5 backdrop-blur-md"
                     >
-                        <ArrowLeft className="h-5 w-5" />
+                        <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                     </Button>
-                    <div className="bg-white/5 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10 flex items-center gap-3 shadow-lg">
-                        <div className={`w-2 h-2 rounded-full ${state.isRecording ? 'bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`} />
-                        <span className="text-sm font-semibold tracking-wide text-slate-200">
+                    <div className="bg-white/5 backdrop-blur-xl px-2 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/10 flex items-center gap-2 sm:gap-3 shadow-lg">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${state.isRecording ? 'bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`} />
+                        <span className="text-xs sm:text-sm font-semibold tracking-wide text-slate-200 hidden xs:inline">
                             {state.isRecording ? "Listening..." : isAiSpeaking ? "AI Speaking" : "Connected"}
                         </span>
-                        <div className="w-px h-4 bg-white/10" />
+                        <div className="w-px h-3 sm:h-4 bg-white/10" />
                         <Clock className="w-3 h-3 text-slate-400" />
-                        <span className="text-sm text-slate-400 font-mono tracking-wider">{formatTime(state.elapsedSeconds)}</span>
+                        <span className="text-xs sm:text-sm text-slate-400 font-mono tracking-wider">{formatTime(state.elapsedSeconds)}</span>
                     </div>
                 </div>
 
@@ -388,12 +444,12 @@ export default function Conversation() {
             </header>
 
             {/* Main Content - Voice Sphere */}
-            <main className="flex-1 flex flex-col items-center justify-center relative z-10 p-6 min-h-[600px]">
+            <main className="flex-1 flex flex-col items-center justify-center relative z-10 p-4 sm:p-6 min-h-[400px] sm:min-h-[600px]">
 
                 {/* The Sphere Container */}
-                <div className="relative mb-16 group">
+                <div className="relative mb-8 sm:mb-16 group">
                     {/* Morphing Background Blob */}
-                    <div className={`absolute -inset-12 morph-blob blur-3xl transition-all duration-1000 ${state.isRecording
+                    <div className={`absolute -inset-8 sm:-inset-12 morph-blob blur-3xl transition-all duration-1000 ${state.isRecording
                         ? 'bg-red-500/20'
                         : isAiSpeaking
                             ? 'bg-blue-500/25'
@@ -419,7 +475,7 @@ export default function Conversation() {
                             opacity: isAiSpeaking ? [0.15, 0.3, 0.15] : state.isRecording ? 0.2 : 0.08
                         }}
                         transition={{ duration: isAiSpeaking ? 1.5 : 3, repeat: Infinity, ease: "easeInOut" }}
-                        className={`absolute -inset-8 rounded-full blur-2xl transition-colors duration-700 ${state.isRecording
+                        className={`absolute -inset-6 sm:-inset-8 rounded-full blur-2xl transition-colors duration-700 ${state.isRecording
                             ? 'bg-gradient-to-br from-red-500/40 to-rose-600/30'
                             : isAiSpeaking
                                 ? 'bg-gradient-to-br from-blue-500/30 to-purple-500/30'
@@ -437,7 +493,7 @@ export default function Conversation() {
                             scale: { duration: 1.5, repeat: Infinity, ease: "easeInOut" },
                             rotate: { duration: 8, repeat: Infinity, ease: "linear" }
                         }}
-                        className={`absolute -inset-5 rounded-full border transition-colors duration-500 ${state.isRecording
+                        className={`absolute -inset-4 sm:-inset-5 rounded-full border transition-colors duration-500 ${state.isRecording
                             ? 'border-red-500/30'
                             : state.isProcessing
                                 ? 'border-dashed border-blue-500/40'
@@ -451,7 +507,7 @@ export default function Conversation() {
                             scale: isAiSpeaking ? [1, 1.04, 1] : state.isRecording ? [1, 1.02, 1] : 1,
                         }}
                         transition={{ duration: isAiSpeaking ? 0.8 : 2, repeat: Infinity, ease: "easeInOut" }}
-                        className={`w-52 h-52 rounded-full shadow-2xl flex items-center justify-center relative overflow-hidden transition-all duration-700 border border-white/10 ${!state.isRecording && !isAiSpeaking && !state.isProcessing ? 'animate-breathe' : ''
+                        className={`w-36 h-36 sm:w-52 sm:h-52 rounded-full shadow-2xl flex items-center justify-center relative overflow-hidden transition-all duration-700 border border-white/10 ${!state.isRecording && !isAiSpeaking && !state.isProcessing ? 'animate-breathe' : ''
                             }`}
                         style={{
                             background: state.isRecording
@@ -564,11 +620,11 @@ export default function Conversation() {
 
             </main>
 
-            {/* Bottom Controls */}
-            <div className="relative z-50 p-10 flex justify-center items-center gap-10">
+            {/* Bottom Controls - Mobile responsive */}
+            <div className="relative z-50 p-4 sm:p-10 flex justify-center items-center gap-4 sm:gap-10">
 
                 {/* Cancel Button (Hidden but usable for layout balance if needed, or keeping simplified) */}
-                <div className="w-20 hidden md:block" />
+                <div className="w-16 sm:w-20 hidden md:block" />
 
                 <div className="relative group">
                     {/* Ripple Effect */}
@@ -579,20 +635,20 @@ export default function Conversation() {
                     <Button
                         onClick={state.isRecording ? stopRecording : startRecording}
                         disabled={isAiSpeaking || state.isProcessing}
-                        className={`h-24 w-24 rounded-full shadow-2xl transition-all duration-300 relative z-10 border-4 border-slate-900 ${state.isRecording
+                        className={`h-16 w-16 sm:h-24 sm:w-24 rounded-full shadow-2xl transition-all duration-300 relative z-10 border-4 border-slate-900 ${state.isRecording
                             ? "bg-gradient-to-br from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 scale-110 shadow-[0_0_40px_rgba(239,68,68,0.4)]"
                             : "bg-white text-slate-900 hover:bg-slate-100 hover:scale-105 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
                             }`}
                     >
                         {state.isRecording ? (
-                            <Square className="w-10 h-10 fill-current text-white" />
+                            <Square className="w-6 h-6 sm:w-10 sm:h-10 fill-current text-white" />
                         ) : (
-                            <Mic className="w-10 h-10 text-slate-900" />
+                            <Mic className="w-6 h-6 sm:w-10 sm:h-10 text-slate-900" />
                         )}
                     </Button>
                 </div>
 
-                <div className="w-20 flex justify-start">
+                <div className="w-16 sm:w-20 flex justify-start">
                     <AnimatePresence>
                         {state.currentDraft && !state.isProcessing && (
                             <motion.div
@@ -602,9 +658,9 @@ export default function Conversation() {
                             >
                                 <Button
                                     onClick={handleSend}
-                                    className="h-16 w-16 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xl shadow-blue-500/20 border border-white/10"
+                                    className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xl shadow-blue-500/20 border border-white/10"
                                 >
-                                    <Send className="w-7 h-7 ml-0.5" />
+                                    <Send className="w-5 h-5 sm:w-7 sm:h-7 ml-0.5" />
                                 </Button>
                             </motion.div>
                         )}

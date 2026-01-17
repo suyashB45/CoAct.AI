@@ -67,6 +67,63 @@ COLORS = {
     'grey_bg': (241, 245, 249)       # Slate 100
 }
 
+SCENARIO_TITLES = {
+    "coaching": {
+        "exec_summary": "PERFORMANCE IN BRIEF",
+        "skills": "COACHING COMPETENCIES",
+        "tactical": "COACHING MOMENTS",
+        "strengths": "EFFECTIVE BEHAVIORS",
+         "growth": "DEVELOPMENT OPPORTUNITIES",
+        "recs": "DEVELOPMENT PLAN",
+        "analytics": "CONVERSATION METRICS"
+    },
+    "negotiation": {
+        "exec_summary": "DEAL OVERVIEW",
+        "skills": "NEGOTIATION SKILLS",
+        "tactical": "TACTICAL MOVES & COUNTERS",
+        "strengths": "WINNING TACTICS",
+        "growth": "MISSED OPPORTUNITIES",
+        "recs": "STRATEGIC ADJUSTMENTS",
+        "analytics": "NEGOTIATION DYNAMICS"
+    },
+    "reflection": {
+        "exec_summary": "REFLECTION SUMMARY",
+        "skills": "LEARNING ANALYSIS",
+        "tactical": "KEY INSIGHTS",
+        "strengths": "SELF-AWARENESS HIGHLIGHTS",
+        "growth": "AREAS FOR DEEPER REFLECTION",
+        "recs": "JOURNALING & PRACTICE",
+        "analytics": "INTERACTION FLOW"
+    },
+    "custom": {
+        "exec_summary": "EXECUTIVE BRIEF",
+        "skills": "COMPETENCY MATRIX",
+        "tactical": "KEY STAKEHOLDER INTERACTIONS",
+        "strengths": "STRATEGIC ASSETS",
+        "growth": "PERFORMANCE GAPS",
+        "recs": "EXECUTIVE ACTION PLAN",
+        "analytics": "ENGAGEMENT METRICS"
+    },
+    "leadership": {
+        "exec_summary": "LEADERSHIP IMPACT BRIEF",
+        "skills": "LEADERSHIP COMPETENCIES",
+        "tactical": "STRATEGIC MOMENTS",
+        "strengths": "VISIONARY TRAITS",
+        "growth": "INFLUENCE GAPS",
+        "recs": "LEADERSHIP DEVELOPMENT PLAN",
+        "analytics": "PRESENCE METRICS"
+    },
+    "customer_service": {
+        "exec_summary": "SERVICE RESOLUTION REPORT",
+        "skills": "CLIENT RELATIONS SKILLS",
+        "tactical": "SERVICE RECOVERY MOMENTS",
+        "strengths": "EMPATHY & PATIENCE",
+        "growth": "RESOLUTION GAPS",
+        "recs": "SERVICE EXCELLENCE PLAN",
+        "analytics": "CUSTOMER SENTIMENT"
+    }
+}
+
 def sanitize_text(text):
     if text is None: return ""
     text = str(text)
@@ -133,160 +190,237 @@ def llm_reply(messages, max_tokens=4000):
         print(f"LLM Error: {e}")
         return "{}"
 
-def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching"):
-    # Prepare conversation for analysis
-    conversation_text = "\\n".join([f"{t['role'].upper()}: {t['content']}" for t in transcript])
+def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
+    """Detect scenario type based on content to determine report structure."""
+    scenario_lower = scenario.lower()
+    ai_role_lower = ai_role.lower()
+    role_lower = role.lower()
+    
+    # Scenario 1: Coaching/Performance Management
+    coaching_keywords = ["coaching", "performance", "dropped", "missed targets", "energy", "engagement", "staff", "team member", "employee"]
+    
+    # Scenario 2: Sales/Negotiation
+    negotiation_keywords = ["customer", "price", "negotiate", "discount", "budget", "sales", "purchase", "buying", "competitor", "offer"]
+    
+    # Scenario 3: Reflection/Learning (with a coach)
+    reflection_keywords = ["coach", "reflection", "learning", "explain", "handled", "feedback", "development", "practice"]
+    
+    # NEW THEMES - Sales & Corporate Only
+    leadership_keywords = ["strategy", "board", "vision", "roadmap", "stakeholders", "executive", "company direction"]
+    customer_service_keywords = ["customer", "complaint", "refund", "service", "angry", "escalation", "support", "ticket"]
+    
+    combined_text = f"{scenario_lower} {ai_role_lower} {role_lower}"
+    
+    # Check for reflection first
+    if "coach" in ai_role_lower or any(kw in combined_text for kw in reflection_keywords[:3]):
+        return "reflection"
+    
+    # Check specific corporate themes
+    if any(kw in combined_text for kw in leadership_keywords):
+        return "leadership"
+    if any(kw in combined_text for kw in customer_service_keywords):
+        return "customer_service"
+    
+    # Check for negotiation
+    if any(kw in combined_text for kw in negotiation_keywords):
+        return "negotiation"
+    
+    # Check for coaching
+    if any(kw in combined_text for kw in coaching_keywords):
+        return "coaching"
+    
+    # Default to custom for anything else
+    return "custom"
+
+
+def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None):
+    """
+    Generate report data with UNIFIED structure for all scenario types.
+    
+    scenario_type: "coaching" | "negotiation" | "reflection" | "custom"
+    - coaching: Staff performance, team management (includes scores)
+    - negotiation: Sales, pricing, customer handling (includes scores)  
+    - reflection: Learning reflection with coach (no scores, qualitative only)
+    - custom: User-defined scenarios (AI decides if scores are appropriate)
+    """
+    # Auto-detect scenario type if not provided
+    if not scenario_type:
+        scenario_type = detect_scenario_type(scenario, ai_role, role)
+    
+    # Determine if this scenario should include numerical scores
+    include_scores = scenario_type in ["coaching", "negotiation", "custom", "leadership", "customer_service"]
     
     # Extract only user messages for focused analysis
     user_msgs = [t for t in transcript if t['role'] == 'user']
-    user_messages_text = "\\n".join([f"USER: {t['content']}" for t in user_msgs])
     
     if not user_msgs:
         return {
             "meta": {
                 "fit_score": 0.0,
                 "fit_label": "Starting Out",
-                "summary": "Every journey begins with a single step! We're excited to see you start your coaching practice."
+                "summary": "Every journey begins with a single step! We're excited to see you start your practice session.",
+                "scenario_type": scenario_type
             },
-            "sidebar_data": {"top_traits": ["Courage to begin"], "improvements": ["Session engagement"]},
-            "mode": mode
+            "executive_summary": {
+                "performance_overview": "The session has just begun. Complete your conversation to receive detailed feedback.",
+                "key_strengths": [],
+                "areas_for_growth": [],
+                "recommended_next_steps": "Engage in the conversation and apply your skills."
+            },
+            "scenario_type": scenario_type
         }
 
     # Framework Specific Instructions
     framework_context = ""
     if framework:
-         framework_context = f"### FOCUS FRAMEWORK: {framework}\\nEvaluate the user's adherence to the principles of {framework}.\\n"
+        framework_context = f"### FOCUS FRAMEWORK: {framework}\\nEvaluate the user's adherence to the principles of {framework}.\\n"
     
-    # Determine Mode-Specific Instructions & Output Format
-    if mode == "evaluation":
-        mode_instruction = """
-### 1️⃣ ASSESSMENT MODE - INSTRUCTIONS
-👉 **Purpose**: Evaluate performance, generate scores, insights, and improvement actions.
-- **TONE**: Professional, objective, evaluative.
-- **SCORING**: You MUST provide scores (0-10) for all dimensions.
-- **FOCUS**: Performance gaps, competency levels, and specific actionable fixes.
-
-### OUTPUT JSON STRUCTURE (ASSESSMENT):
-{
-  "meta": {
-    "summary": "Concise overview of performance (e.g., 'The participant demonstrated moderate effectiveness...').",
-    "emotional_trajectory": "Skeptical -> Collaborative",
-    "session_quality": "High engagement with clear learning moments",
-    "key_themes": ["Active listening", "Question framing", "Empathy building"]
-  },
-  "skill_dimension_scores": [
-    { "dimension": "Listening & Empathy", "score": <0-10>, "interpretation": "Demonstrated understanding but...", "evidence": "Quote showing this skill in action", "improvement_tip": "Specific actionable advice" },
-    { "dimension": "Questioning Quality", "score": <0-10>, "interpretation": "Relied on leading questions...", "evidence": "Quote showing this skill", "improvement_tip": "Try open-ended questions like 'What if...?'" },
-    { "dimension": "Psychological Safety", "score": <0-10>, "interpretation": "Maintained non-threatening tone...", "evidence": "Quote demonstrating safety creation", "improvement_tip": "Continue validating emotions before exploring solutions" },
-    { "dimension": "Coaching vs Telling", "score": <0-10>, "interpretation": "Shifted to advice too quickly...", "evidence": "Quote showing coaching approach", "improvement_tip": "Ask 'What options do you see?' before suggesting" },
-    { "dimension": "Overall Effectiveness", "score": <0-10>, "interpretation": "Consistent foundation with room for refinement...", "evidence": "Quote showing overall approach", "improvement_tip": "Focus on one skill at a time for deeper impact" }
-  ],
-  "tactical_observations": {
-    "success": { "moment": "Quote...", "analysis": "Why it worked...", "impact": "How it affected the conversation", "replication": "How to do this again" },
-    "risk": { "moment": "Quote...", "analysis": "Why it was risky...", "alternative": "What could have been done instead", "prevention": "How to avoid this pattern" }
-  },
-  "observed_strengths": [
-    { "title": "Safety Creator", "observation": "Created a psychologically safe environment...", "frequency": "Consistent throughout", "business_impact": "Builds trust for difficult conversations" }
-  ],
-  "growth_opportunities": [
-    { "title": "Leading Questions", "observation": "Overused leading questions...", "suggestion": "Ask 'What' instead of 'Don't you think'...", "practice_method": "Role-play with open-ended question stems", "timeline": "Practice in next 2-3 conversations" }
-  ],
-  "effectiveness_insights": [
-    { "moment": "You said...", "reframe": "Try saying...", "why": "Explanation...", "skill_area": "Active Listening", "difficulty": "Intermediate" }
-  ],
-  "manager_recommendations": {
-    "immediate_action": "Use more 'What' and 'How' questions.",
-    "next_simulation": "Practice 'Active Listening' drills.",
-    "development_focus": "Questioning techniques and pause management",
-    "timeline": "2-week focused practice period",
-    "success_metrics": "Increase open-ended questions by 50%, reduce advice-giving by 30%"
-  },
-  "conversation_analytics": {
-    "total_exchanges": <number>,
-    "user_talk_time_percentage": <0-100>,
-    "question_to_statement_ratio": <ratio>,
-    "emotional_tone_progression": "Started cautious, became more open",
-    "framework_adherence": "Strong GROW model application"
-  },
-  "personalized_learning_path": [
-    { "skill": "Open-ended questioning", "priority": "High", "resources": ["Practice guide", "Video examples"], "timeline": "Week 1-2" },
-    { "skill": "Pause management", "priority": "Medium", "resources": ["Timing exercises"], "timeline": "Week 3-4" }
-  ]
-}
+    # UNIFIED REPORT STRUCTURE - Same for all scenarios
+    score_instruction = ""
+    if include_scores:
+        score_instruction = """
+- **SCORING**: Include numerical scores (0-10) in skill_analysis.
+- Each skill should have: dimension, score (0-10), level ("Strong"/"Developing"/"Needs Focus"), interpretation, evidence, improvement_tip
 """
     else:
-        mode_instruction = """
-### 2️⃣ LEARNING MODE - INSTRUCTIONS
-👉 **Purpose**: Develop skills without judgment, scores, or evaluation.
-- **TONE**: Supportive, reflective, coaching-oriented.
-- **STRICTLY FORBIDDEN**: Do NOT use words like "Score", "Grade", "Rating", "Fail", "Poor". NO NUMBERS.
-- **FOCUS**: Self-awareness, reflection, practice, and "how to think".
+        score_instruction = """
+- **NO SCORES**: Do NOT include numerical scores. Use qualitative levels only.
+- Each skill should have: dimension, level ("Strong"/"Developing"/"Needs Focus"), interpretation, evidence, improvement_tip
+- STRICTLY FORBIDDEN: Words like "Score", "Grade", "Rating", numbers for evaluation
+"""
 
-### OUTPUT JSON STRUCTURE (LEARNING):
-{
-  "meta": {
-    "summary": "Neutral reflection of patterns (e.g., 'You focused on explaining solutions quickly...').",
-    "emotional_trajectory": "Curious -> Reflective",
-    "session_energy": "Engaged and thoughtful throughout",
-    "learning_moments": ["Discovered power of silence", "Recognized advice-giving pattern", "Felt impact of open questions"]
-  },
-  "key_insights": [
-    { "pattern": "Pacing", "description": "You tend to respond faster than you probe.", "self_awareness_question": "What drives your urgency to respond quickly?", "exploration_area": "Comfort with silence and pause" },
-    { "pattern": "Curiosity", "description": "You prioritize clarity over curiosity.", "self_awareness_question": "What would happen if you stayed curious longer?", "exploration_area": "Question sequencing and depth" }
+    unified_instruction = f"""
+### UNIFIED REPORT GENERATION
+👉 **Purpose**: Generate a comprehensive skill development report.
+- **TONE**: Professional, constructive, actionable.
+- **SCENARIO TYPE**: {scenario_type.upper()}
+{score_instruction}
+
+### OUTPUT JSON STRUCTURE:
+{{
+  "meta": {{
+    "summary": "2-3 sentence overview of the session and key observations.",
+    "scenario_type": "{scenario_type}",
+    "emotional_trajectory": "e.g., 'Skeptical -> Collaborative' or 'Curious -> Reflective'",
+    "session_quality": "Brief quality assessment of the interaction",
+    "key_themes": ["Theme 1", "Theme 2", "Theme 3"]
+  }},
+  "executive_summary": {{
+    "performance_overview": "A comprehensive paragraph summarizing overall performance, approach, and impact.",
+    "key_strengths": ["Strength 1 with brief explanation", "Strength 2 with brief explanation"],
+    "areas_for_growth": ["Area 1 with brief explanation", "Area 2 with brief explanation"],
+    "recommended_next_steps": "Specific, actionable guidance for immediate improvement."
+  }},
+  "skill_analysis": [
+    {{ 
+      "dimension": "Listening & Empathy", 
+      {"\"score\": 7," if include_scores else ""}
+      "level": "Strong|Developing|Needs Focus",
+      "interpretation": "What was observed...", 
+      "evidence": "Direct quote from conversation", 
+      "improvement_tip": "Specific actionable advice" 
+    }},
+    {{ 
+      "dimension": "Questioning Quality", 
+      {"\"score\": 6," if include_scores else ""}
+      "level": "Strong|Developing|Needs Focus",
+      "interpretation": "What was observed...", 
+      "evidence": "Direct quote", 
+      "improvement_tip": "Advice" 
+    }},
+    {{ 
+      "dimension": "Psychological Safety", 
+      {"\"score\": 8," if include_scores else ""}
+      "level": "Strong|Developing|Needs Focus",
+      "interpretation": "What was observed...", 
+      "evidence": "Quote", 
+      "improvement_tip": "Advice" 
+    }},
+    {{ 
+      "dimension": "Coaching vs Telling", 
+      {"\"score\": 5," if include_scores else ""}
+      "level": "Strong|Developing|Needs Focus",
+      "interpretation": "What was observed...", 
+      "evidence": "Quote", 
+      "improvement_tip": "Advice" 
+    }},
+    {{ 
+      "dimension": "Overall Effectiveness", 
+      {"\"score\": 7," if include_scores else ""}
+      "level": "Strong|Developing|Needs Focus",
+      "interpretation": "What was observed...", 
+      "evidence": "Quote", 
+      "improvement_tip": "Advice" 
+    }}
   ],
-  "reflective_questions": [
-    { "question": "What was the other person really trying to achieve?", "purpose": "Deepen empathy and understanding", "timing": "Use during conversations" },
-    { "question": "How might the conversation change if you paused longer?", "purpose": "Explore pacing and presence", "timing": "Practice in low-stakes situations" }
+  "tactical_observations": {{
+    "success": {{ 
+      "moment": "Quote of effective moment...", 
+      "analysis": "Why it worked...", 
+      "impact": "Effect on conversation", 
+      "replication": "How to repeat this" 
+    }},
+    "risk": {{ 
+      "moment": "Quote of risky moment...", 
+      "analysis": "Why it was problematic...", 
+      "alternative": "Better approach", 
+      "prevention": "How to avoid" 
+    }}
+  }},
+  "observed_strengths": [
+    {{ 
+      "title": "Strength Name", 
+      "observation": "Detailed observation of the strength in action...",
+      "business_impact": "How this strength benefits outcomes"
+    }}
   ],
-  "skill_focus_areas": [
-    { "skill": "Active Listening", "description": "Focus on hearing the unsaid.", "why_important": "Creates deeper connection and trust", "practice_opportunities": "Daily conversations, team meetings", "success_indicators": "Others feel truly heard" },
-    { "skill": "Open-Ended Questioning", "description": "Using 'What' and 'How' to explore.", "why_important": "Unlocks creative thinking and ownership", "practice_opportunities": "One-on-ones, problem-solving sessions", "success_indicators": "People generate their own solutions" }
+  "growth_opportunities": [
+    {{ 
+      "title": "Opportunity Name", 
+      "observation": "What was noticed...", 
+      "suggestion": "How to improve...",
+      "practice_method": "Specific exercise or approach"
+    }}
   ],
-  "suggested_approaches": [
-    { "moment": "You explained...", "alternative": "Try exploring...", "benefit": "This allows the user to...", "skill_practiced": "Coaching vs. Telling", "confidence_level": "Start with low-risk situations" }
-  ],
-  "practice_plan": [
-    { "action": "Ask at least 3 open questions before responding.", "frequency": "Every conversation this week", "reflection_prompt": "What did you discover by waiting?", "difficulty": "Beginner" },
-    { "action": "Pause 2-3 seconds after each reply.", "frequency": "Daily practice", "reflection_prompt": "How did the silence feel? What emerged?", "difficulty": "Intermediate" }
-  ],
-  "learning_outcome": "With continued focus on curiosity, your interactions will feel more collaborative...",
-  "mindset_shifts": [
-    { "from": "I need to have the answer", "to": "I can help them find their answer", "practice_area": "Coaching conversations" },
-    { "from": "Silence means I'm not helping", "to": "Silence creates space for thinking", "practice_area": "Pause management" }
-  ],
-  "strengths_to_leverage": [
-    { "strength": "Natural empathy", "how_to_use": "Trust your instincts about emotional undertones", "amplification": "Verbalize what you're sensing to check understanding" }
-  ],
-  "curiosity_builders": [
-    { "technique": "The 5 Whys", "description": "Keep asking 'why' to go deeper", "when_to_use": "When someone states a conclusion" },
-    { "technique": "Assumption checking", "description": "Notice and question your assumptions", "when_to_use": "When you think you know the answer" }
-  ],
-  "reflection_journal_prompts": [
-    "What surprised me most about this conversation?",
-    "When did I feel most connected to the other person?",
-    "What would I do differently if I could replay one moment?"
-  ]
-}
+  "personalized_recommendations": {{
+    "immediate_actions": ["Action 1", "Action 2"],
+    "focus_areas": ["Focus 1 with context", "Focus 2 with context"],
+    "reflection_prompts": [
+      "What was the other person really trying to achieve?",
+      "How might the conversation change if you paused longer?",
+      "What assumptions did you make that you could question?"
+    ],
+    "practice_suggestions": [
+      {{ "action": "Practice action", "frequency": "How often", "success_indicator": "How to know it's working" }}
+    ]
+  }},
+  "learning_outcome": "A brief, inspiring statement about what the user achieved or learned (optional, primarily for Reflection scenarios).",
+  "conversation_analytics": {{
+    "total_exchanges": <number>,
+    "user_talk_time_percentage": <0-100>,
+    "question_to_statement_ratio": "<ratio string>",
+    "emotional_tone_progression": "Description of emotional arc"
+  }}
+}}
 """
 
     # Unified System Prompt
     system_prompt = (
         f"### SYSTEM ROLE\\n"
-        f"You are an expert Soft Skills Development Coach acting as the logic engine for 'COACT.AI Reports'.\\n"
+        f"You are an expert Soft Skills Development Coach generating reports for 'COACT.AI'.\\n"
         f"Context: {scenario}\\n"
         f"User Role: {role} | AI Role: {ai_role}\\n"
         f"{framework_context}\\n"
-        f"{mode_instruction}\\n"
+        f"{unified_instruction}\\n"
         f"### GENERAL RULES\\n"
-        "1. Be specific and citation-based (quote the user).\\n"
-        "2. Be constructive.\\n"
-        "3. OUTPUT MUST BE VALID JSON ONLY.\\n"
+        "1. Be specific and citation-based (quote the user directly).\\n"
+        "2. Be constructive and actionable.\\n"
+        "3. OUTPUT MUST BE VALID JSON ONLY. No markdown, no explanations.\\n"
     )
 
     try:
-        # Create clearly separated sections for the LLM
+        # Create conversation text for analysis
         full_conversation = "\\n".join([f"{'USER' if t['role'] == 'user' else 'ASSISTANT'}: {t['content']}" for t in transcript])
-        user_only_messages = "\\n".join([f"USER: {t['content']}" for t in transcript if t['role'] == 'user'])
         
         analysis_input = f"""### FULL CONVERSATION
 {full_conversation}
@@ -299,26 +433,45 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         clean_text = response.replace("```json", "").replace("```", "").strip()
         data = json.loads(clean_text)
         
-        # Add common meta
-        data['mode'] = mode
-        if 'meta' not in data: data['meta'] = {}
+        # Add/normalize metadata
+        data['scenario_type'] = scenario_type
+        if 'meta' not in data: 
+            data['meta'] = {}
+        data['meta']['scenario_type'] = scenario_type
         
-        # Normalize data for frontend compatibility if needed
-        # Calculate average score from skill dimensions if available
-        if mode == 'evaluation':
-            skill_scores = data.get('skill_dimension_scores', [])
-            if skill_scores:
-                avg_score = sum(s.get('score', 0) for s in skill_scores) / len(skill_scores)
+        # Calculate fit_score from skill_analysis if scores are present
+        skill_analysis = data.get('skill_analysis', [])
+        if skill_analysis and any('score' in s for s in skill_analysis):
+            scores = [s.get('score', 0) for s in skill_analysis if 'score' in s]
+            if scores:
+                avg_score = sum(scores) / len(scores)
                 data['meta']['fit_score'] = avg_score / 10
             else:
                 data['meta']['fit_score'] = 0
         else:
             data['meta']['fit_score'] = 0
+        
+        # Backward compatibility: map to old structure if needed
+        # skill_analysis -> skill_dimension_scores for frontend
+        if 'skill_analysis' in data and 'skill_dimension_scores' not in data:
+            data['skill_dimension_scores'] = data['skill_analysis']
             
         return data
+        
     except Exception as e:
         print(f"JSON Parse Error: {e}")
-        return {"mode": mode, "meta": {"summary": "Error generating report."}}
+        import traceback
+        traceback.print_exc()
+        return {
+            "scenario_type": scenario_type,
+            "meta": {"summary": "Error generating report. Please try again.", "scenario_type": scenario_type},
+            "executive_summary": {
+                "performance_overview": "Report generation encountered an error.",
+                "key_strengths": [],
+                "areas_for_growth": [],
+                "recommended_next_steps": "Please try generating the report again."
+            }
+        }
 
 class DashboardPDF(FPDF):
     def cell(self, w, h=0, txt='', border=0, ln=0, align='', fill=False, link=''):
@@ -347,6 +500,13 @@ class DashboardPDF(FPDF):
         # Timestamp on right
         self.set_font('Arial', '', 7)
         super().cell(0, 10, dt.datetime.now().strftime('%Y-%m-%d'), 0, 0, 'R')
+
+    def set_scenario_type(self, scenario_type):
+        self.scenario_type = scenario_type
+
+    def get_title(self, section_key):
+        stype = getattr(self, 'scenario_type', 'custom')
+        return SCENARIO_TITLES.get(stype, SCENARIO_TITLES['custom']).get(section_key, section_key.upper())
 
     def linear_gradient(self, x, y, w, h, c1, c2, orientation='H'):
         self.set_line_width(0)
@@ -415,12 +575,12 @@ class DashboardPDF(FPDF):
         self.set_line_width(0.2)
         self.ln(4)
 
-    def draw_banner(self, meta, mode="coaching"):
+    def draw_banner(self, meta, scenario_type="custom"):
+        """Draw the summary banner at the top of the report."""
         summary = meta.get('summary', '')
         emotional_trajectory = meta.get('emotional_trajectory', '')
         session_quality = meta.get('session_quality', '')
         key_themes = meta.get('key_themes', [])
-        learning_moments = meta.get('learning_moments', [])
         
         self.set_y(self.get_y() + 3)
         start_y = self.get_y()
@@ -429,7 +589,7 @@ class DashboardPDF(FPDF):
         base_height = 50
         if emotional_trajectory: base_height += 8
         if session_quality: base_height += 8
-        if key_themes or learning_moments: base_height += 10
+        if key_themes: base_height += 10
         banner_height = base_height
         
         # Main Card with shadow effect
@@ -441,20 +601,41 @@ class DashboardPDF(FPDF):
         self.set_draw_color(226, 232, 240)
         self.rect(10, start_y, 190, banner_height, 'DF')
         
-        # Accent bar on left - mode-specific color
-        if mode == "evaluation":
-            self.set_fill_color(59, 130, 246)  # Blue
-        else:
-            self.set_fill_color(16, 185, 129)  # Emerald
+        # Scenario-type specific colors and labels
+        scenario_colors = {
+            "coaching": (59, 130, 246),    # Blue
+            "negotiation": (16, 185, 129), # Green  
+            "reflection": (139, 92, 246),  # Purple
+            "custom": (245, 158, 11),      # Orange/Amber
+            "leadership": (99, 102, 241),  # Indigo (Authority)
+            "customer_service": (239, 68, 68) # Red (Urgency/Resolution)
+        }
+        scenario_labels = {
+            "coaching": "COACHING & PERFORMANCE",
+            "negotiation": "SALES & NEGOTIATION",
+            "reflection": "LEARNING REFLECTION",
+            "custom": "CORPORATE SCENARIO",
+            "leadership": "LEADERSHIP & STRATEGY",
+            "customer_service": "CUSTOMER SERVICE"
+        }
+        
+        accent_color = scenario_colors.get(scenario_type, scenario_colors["custom"])
+        scenario_label = scenario_labels.get(scenario_type, scenario_labels["custom"])
+        
+        # Accent bar on left - scenario-specific color
+        self.set_fill_color(*accent_color)
         self.rect(10, start_y, 4, banner_height, 'F')
         
-        # Mode-specific title with icon
+        # Scenario-type label with icon
         self.set_xy(18, start_y + 6)
         self.set_font('Arial', 'B', 10)
         self.set_text_color(71, 85, 105)  # Slate 600
-        icon = "[>]" if mode == "evaluation" else "[*]"
-        title = f"{icon} PERFORMANCE ASSESSMENT" if mode == "evaluation" else f"{icon} LEARNING REFLECTION"
-        self.cell(100, 5, title, 0, 1)
+        icon_map = {
+            "coaching": "[C]", "negotiation": "[N]", "reflection": "[R]", "custom": "[*]",
+            "leadership": "[L]", "customer_service": "[S]"
+        }
+        icon = icon_map.get(scenario_type, "[*]")
+        self.cell(100, 5, f"{icon} {scenario_label}", 0, 1)
         
         # Summary text
         self.set_xy(18, self.get_y() + 3)
@@ -490,39 +671,174 @@ class DashboardPDF(FPDF):
             current_y += 7
         
         # Key themes with pill-style display
-        themes_to_show = key_themes if mode == "evaluation" else learning_moments
-        if themes_to_show:
+        if key_themes:
             self.set_xy(18, current_y)
             self.set_font('Arial', 'B', 8)
             self.set_text_color(236, 72, 153)  # Pink
             self.cell(3, 4, ">", 0, 0)
             self.set_text_color(100, 116, 139)
-            label = "KEY THEMES:" if mode == "evaluation" else "HIGHLIGHTS:"
-            self.cell(38, 4, label, 0, 0)
+            self.cell(38, 4, "KEY THEMES:", 0, 0)
             self.set_font('Arial', 'I', 9)
             self.set_text_color(71, 85, 105)
-            themes_text = " | ".join([sanitize_text(str(theme)) for theme in themes_to_show[:3]])
+            themes_text = " | ".join([sanitize_text(str(theme)) for theme in key_themes[:3]])
             self.cell(0, 4, themes_text, 0, 1)
         
         self.set_y(start_y + banner_height + 8)
+    
+    def draw_executive_summary(self, exec_summary):
+        """Draw the Executive Summary section - NEW unified section for all reports."""
+        if not exec_summary:
+            return
+        
+        self.check_space(80)
+        self.ln(5)
+        
+        # Section header with gradient-like background
+        self.set_fill_color(30, 41, 59)  # Slate 800
+        self.rect(10, self.get_y(), 190, 12, 'F')
+        self.set_xy(15, self.get_y() + 3)
+        self.set_font('Arial', 'B', 11)
+        self.set_text_color(255, 255, 255)
+        self.cell(0, 6, self.get_title("exec_summary"), 0, 1)
+        self.ln(3)
+        
+        # Performance Overview
+        overview = exec_summary.get('performance_overview', '')
+        if overview:
+            self.set_font('Arial', '', 10)
+            self.set_text_color(*COLORS['text_main'])
+            self.multi_cell(0, 6, sanitize_text(overview))
+            self.ln(6)
+        
+        # Two-column layout for strengths and growth areas
+        start_y = self.get_y()
+        
+        # Key Strengths (left column)
+        strengths = exec_summary.get('key_strengths', [])
+        if strengths:
+            self.set_fill_color(240, 253, 244)  # Green 50
+            self.rect(10, start_y, 90, 45, 'F')
+            self.set_xy(15, start_y + 5)
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(*COLORS['success'])
+            self.cell(80, 5, "KEY STRENGTHS", 0, 1)
+            
+            self.set_font('Arial', '', 9)
+            self.set_text_color(*COLORS['text_main'])
+            for i, strength in enumerate(strengths[:3]):
+                self.set_x(15)
+                self.multi_cell(80, 5, f"+ {sanitize_text(strength)}")
+        
+        # Areas for Growth (right column)
+        growth = exec_summary.get('areas_for_growth', [])
+        if growth:
+            self.set_fill_color(254, 249, 195)  # Yellow 100
+            self.rect(105, start_y, 95, 45, 'F')
+            self.set_xy(110, start_y + 5)
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(*COLORS['warning'])
+            self.cell(85, 5, "AREAS FOR GROWTH", 0, 1)
+            
+            self.set_font('Arial', '', 9)
+            self.set_text_color(*COLORS['text_main'])
+            for i, area in enumerate(growth[:3]):
+                self.set_x(110)
+                self.multi_cell(85, 5, f"- {sanitize_text(area)}")
+        
+        self.set_y(start_y + 50)
+        
+        # Recommended Next Steps
+        next_steps = exec_summary.get('recommended_next_steps', '')
+        if next_steps:
+            self.set_fill_color(248, 250, 252)  # Slate 50
+            self.rect(10, self.get_y(), 190, 20, 'F')
+            self.set_xy(15, self.get_y() + 5)
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(*COLORS['accent'])
+            self.cell(40, 5, "NEXT STEPS:", 0, 0)
+            self.set_font('Arial', '', 9)
+            self.set_text_color(*COLORS['text_main'])
+            self.multi_cell(145, 5, sanitize_text(next_steps))
+            self.ln(5)
+        
+        self.ln(5)
+    
+    def draw_personalized_recommendations(self, recs):
+        """Draw the unified personalized recommendations section."""
+        if not recs:
+            return
+        
+        self.check_space(70)
+        self.ln(5)
+        
+        # Dark header block
+        self.set_fill_color(30, 41, 59)  # Slate 800
+        self.rect(10, self.get_y(), 190, 60, 'F')
+        
+        start_y = self.get_y()
+        self.set_xy(15, start_y + 5)
+        self.set_font('Arial', 'B', 11)
+        self.set_text_color(255, 255, 255)
+        self.cell(0, 8, self.get_title("recs"), 0, 1)
+        
+        # Immediate Actions
+        actions = recs.get('immediate_actions', [])
+        if actions:
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(147, 197, 253)  # Blue 300
+            self.cell(50, 6, "IMMEDIATE ACTIONS:", 0, 0)
+            self.set_font('Arial', '', 9)
+            self.set_text_color(255, 255, 255)
+            actions_text = ", ".join([sanitize_text(a) for a in actions[:3]])
+            self.multi_cell(135, 6, actions_text)
+        
+        # Focus Areas
+        focus = recs.get('focus_areas', [])
+        if focus:
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(147, 197, 253)
+            self.cell(50, 6, "FOCUS AREAS:", 0, 0)
+            self.set_font('Arial', '', 9)
+            self.set_text_color(255, 255, 255)
+            focus_text = ", ".join([sanitize_text(f) for f in focus[:3]])
+            self.multi_cell(135, 6, focus_text)
+        
+        # Reflection Prompts
+        prompts = recs.get('reflection_prompts', [])
+        if prompts:
+            self.ln(2)
+            self.set_font('Arial', 'I', 8)
+            self.set_text_color(203, 213, 225)  # Slate 300
+            for prompt in prompts[:2]:
+                self.set_x(15)
+                self.cell(0, 4, f"? {sanitize_text(prompt)}", 0, 1)
+        
+        self.set_y(start_y + 65)
 
     # --- ASSESSMENT MODE DRAWING METHODS ---
 
-    def draw_assessment_table(self, scores):
+    def draw_assessment_table(self, scores, show_scores=True):
         if not scores: return
         self.check_space(80)
         self.ln(5)
         
-        self.draw_section_header("SKILL DIMENSION ANALYSIS", COLORS['primary'])
+        self.draw_section_header(self.get_title("skills"), COLORS['primary'])
 
+        # Widths
+        w_dim = 45 if show_scores else 50
+        w_score = 15
+        w_interp = 65 if show_scores else 70
+        w_tip = 65 if show_scores else 70
+        
         # Header
         self.set_fill_color(241, 245, 249)
         self.set_font('Arial', 'B', 9)
         self.set_text_color(*COLORS['text_main'])
-        self.cell(45, 8, "DIMENSION", 1, 0, 'L', True)
-        self.cell(15, 8, "SCORE", 1, 0, 'C', True)
-        self.cell(65, 8, "INTERPRETATION", 1, 0, 'L', True)
-        self.cell(65, 8, "IMPROVEMENT TIP", 1, 1, 'L', True)
+        self.cell(w_dim, 8, "DIMENSION", 1, 0, 'L', True)
+        if show_scores:
+            self.cell(w_score, 8, "SCORE", 1, 0, 'C', True)
+        self.cell(w_interp, 8, "INTERPRETATION", 1, 0, 'L', True)
+        self.cell(w_tip, 8, "IMPROVEMENT TIP", 1, 1, 'L', True)
 
         for item in scores:
             dim = sanitize_text(item.get('dimension', ''))
@@ -535,26 +851,27 @@ class DashboardPDF(FPDF):
 
             self.set_font('Arial', 'B', 9)
             self.set_text_color(*COLORS['text_main'])
-            self.cell(45, row_height, dim, 1, 0, 'L')
+            self.cell(w_dim, row_height, dim, 1, 0, 'L')
             
-            # Score Color
-            if score >= 8: self.set_text_color(*COLORS['success'])
-            elif score >= 6: self.set_text_color(*COLORS['warning'])
-            else: self.set_text_color(*COLORS['danger'])
-            
-            self.cell(15, row_height, f"{score}/10", 1, 0, 'C')
+            if show_scores:
+                # Score Color
+                if score >= 8: self.set_text_color(*COLORS['success'])
+                elif score >= 6: self.set_text_color(*COLORS['warning'])
+                else: self.set_text_color(*COLORS['danger'])
+                
+                self.cell(w_score, row_height, f"{score}/10", 1, 0, 'C')
             
             # Interpretation
             self.set_text_color(*COLORS['text_main'])
             self.set_font('Arial', '', 8)
             current_x = self.get_x()
             current_y = self.get_y()
-            self.multi_cell(65, 7.5, interp, border=1, align='L')
+            self.multi_cell(w_interp, 7.5, interp, border=1, align='L')
             
             # Improvement tip
-            self.set_xy(current_x + 65, current_y)
+            self.set_xy(current_x + w_interp, current_y)
             self.set_text_color(*COLORS['accent'])
-            self.multi_cell(65, 7.5, tip, border=1, align='L')
+            self.multi_cell(w_tip, 7.5, tip, border=1, align='L')
             
             # Move to next row
             self.set_xy(10, current_y + row_height)
@@ -565,7 +882,7 @@ class DashboardPDF(FPDF):
         if not analytics: return
         self.check_space(40)
         
-        self.draw_section_header("CONVERSATION ANALYTICS", COLORS['secondary'])
+        self.draw_section_header(self.get_title("analytics"), COLORS['secondary'])
         
         # Create a 2x3 grid of metrics
         metrics = [
@@ -626,6 +943,8 @@ class DashboardPDF(FPDF):
     def draw_tactical_observations(self, obs):
         if not obs: return
         self.check_space(80)
+        
+        self.draw_section_header(self.get_title("tactical"), COLORS['section_skills'])
         
         success = obs.get('success', {})
         risk = obs.get('risk', {})
@@ -857,166 +1176,8 @@ class DashboardPDF(FPDF):
         self.set_y(chart_y + (len(scores) * (bar_h + gap)) + 8)
 
 
-    # --- LEARNING MODE DRAWING METHODS ---
-
-    def draw_behavioral_sidebar(self, insights):
-        if not insights: return
-        self.check_space(80)
-        self.ln(5)
-        
-        self.draw_section_header("KEY INSIGHTS & SELF-AWARENESS", COLORS['primary'])
-        
-        for p in insights:
-            pattern = sanitize_text(p.get('pattern', ''))
-            description = sanitize_text(p.get('description', ''))
-            question = sanitize_text(p.get('self_awareness_question', ''))
-            
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['accent'])
-            self.cell(0, 6, f"• {pattern}", 0, 1)
-            
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(0, 5, description)
-            
-            if question:
-                self.set_font('Arial', 'I', 9)
-                self.set_text_color(*COLORS['text_light'])
-                self.multi_cell(0, 5, f"Reflect: {question}")
-            
-            self.ln(3)
-
-    def draw_mindset_shifts(self, shifts):
-        if not shifts: return
-        self.check_space(60)
-        
-        self.draw_section_header("MINDSET TRANSFORMATIONS", COLORS['section_coach'])
-        
-        for shift in shifts:
-            from_mindset = sanitize_text(shift.get('from', ''))
-            to_mindset = sanitize_text(shift.get('to', ''))
-            practice_area = sanitize_text(shift.get('practice_area', ''))
-            
-            # From mindset (old)
-            self.set_fill_color(254, 226, 226) # Red 100
-            self.rect(10, self.get_y(), 90, 20, 'F')
-            self.set_xy(15, self.get_y() + 3)
-            self.set_font('Arial', 'B', 8)
-            self.set_text_color(*COLORS['danger'])
-            self.cell(80, 4, "FROM:", 0, 1)
-            self.set_x(15)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(80, 4, from_mindset)
-            
-            # Arrow
-            arrow_y = self.get_y() - 10
-            self.set_xy(100, arrow_y)
-            self.set_font('Arial', 'B', 12)
-            self.set_text_color(*COLORS['text_light'])
-            self.cell(10, 10, "→", 0, 0, 'C')
-            
-            # To mindset (new)
-            self.set_fill_color(240, 253, 244) # Green 50
-            self.rect(110, arrow_y - 10, 90, 20, 'F')
-            self.set_xy(115, arrow_y - 7)
-            self.set_font('Arial', 'B', 8)
-            self.set_text_color(*COLORS['success'])
-            self.cell(80, 4, "TO:", 0, 1)
-            self.set_x(115)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(80, 4, to_mindset)
-            
-            # Practice area
-            if practice_area:
-                self.set_font('Arial', 'I', 8)
-                self.set_text_color(*COLORS['text_light'])
-                self.cell(0, 5, f"Practice in: {practice_area}", 0, 1)
-            
-            self.ln(5)
-
-    def draw_curiosity_builders(self, builders):
-        if not builders: return
-        self.check_space(50)
-        
-        self.draw_section_header("CURIOSITY BUILDING TECHNIQUES", COLORS['section_comm'])
-        
-        for builder in builders:
-            technique = sanitize_text(builder.get('technique', ''))
-            description = sanitize_text(builder.get('description', ''))
-            when_to_use = sanitize_text(builder.get('when_to_use', ''))
-            
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['section_comm'])
-            self.cell(0, 6, f"🔍 {technique}", 0, 1)
-            
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(0, 5, description)
-            
-            if when_to_use:
-                self.set_font('Arial', 'I', 8)
-                self.set_text_color(*COLORS['text_light'])
-                self.multi_cell(0, 4, f"Use when: {when_to_use}")
-            
-            self.ln(3)
-
-    def draw_reflection_prompts(self, prompts):
-        if not prompts: return
-        self.check_space(40)
-        
-        self.draw_section_header("REFLECTION JOURNAL PROMPTS", COLORS['section_eq'])
-        
-        self.set_fill_color(248, 250, 252)
-        self.rect(10, self.get_y(), 190, len(prompts) * 8 + 10, 'F')
-        
-        start_y = self.get_y()
-        for i, prompt in enumerate(prompts):
-            self.set_xy(15, start_y + 5 + i * 8)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.cell(0, 6, f"• {sanitize_text(prompt)}", 0, 1)
-        
-        self.set_y(start_y + len(prompts) * 8 + 15)
-        self.ln(5)
-
-    def draw_reflection_guide(self, questions):
-        if not questions: return
-        self.check_space(50)
-        self.draw_section_header("REFLECTIVE COACHING QUESTIONS", COLORS['section_comm'])
-        
-        self.set_fill_color(248, 250, 252)
-        self.rect(10, self.get_y(), 190, len(questions)*15 + 10, 'F')
-        self.set_y(self.get_y() + 5)
-        
-        for q in questions:
-            self.set_x(15)
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['accent'])
-            self.cell(10, 6, "?", 0, 0)
-            self.set_font('Arial', 'I', 10)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(170, 6, sanitize_text(q))
-            self.ln(4)
-        self.ln(5)
-
-    def draw_skill_focus(self, skills):
-        if not skills: return
-        self.check_space(50)
-        self.draw_section_header("SKILL FOCUS AREAS", COLORS['section_skills'])
-        
-        for skill in skills:
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['primary'])
-            self.cell(50, 6, sanitize_text(skill.get('skill')), 0, 0)
-            
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_light'])
-            self.multi_cell(0, 6, sanitize_text(skill.get('description')))
-            self.ln(2)
-        self.ln(5)
-
+    # --- LEARNING DETAILS ---
+    
     def draw_learning_outcome(self, outcome):
         if not outcome: return
         self.check_space(30)
@@ -1036,27 +1197,11 @@ class DashboardPDF(FPDF):
         self.multi_cell(180, 5, sanitize_text(outcome))
         self.ln(10)
 
-    def draw_practice_prompts(self, prompts):
-        if not prompts: return
-        self.check_space(40)
-        self.draw_section_header("PRACTICE PLAN", COLORS['section_coach'])
-        
-        for p in prompts[:5]:
-            self.set_x(15)
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['text_main'])
-            self.cell(5, 5, "-", 0, 0)
-            
-            self.set_font('Arial', '', 10)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(170, 5, sanitize_text(p))
-            self.ln(2)
-
     # --- SHARED DRAWING METHODS ---
     def draw_observed_strengths(self, strengths):
         if not strengths: return
         self.check_space(60)
-        self.draw_section_header("STRENGTHS IDENTIFIED", COLORS['success'])
+        self.draw_section_header(self.get_title("strengths"), COLORS['success'])
         
         for strength in strengths:
             self.set_font('Arial', 'B', 10)
@@ -1075,7 +1220,7 @@ class DashboardPDF(FPDF):
     def draw_coaching_opportunities(self, opportunities):
         if not opportunities: return
         self.check_space(60)
-        self.draw_section_header("IMPROVEMENT AREAS", COLORS['warning'])
+        self.draw_section_header(self.get_title("growth"), COLORS['warning'])
         
         for opp in opportunities:
             self.set_font('Arial', 'B', 10)
@@ -1090,116 +1235,92 @@ class DashboardPDF(FPDF):
             self.multi_cell(0, 5, observation)
             self.ln(3)
 
-def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None):
-    print(f"Generating Enhanced PDF Report ({mode})...")
+def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None):
+    """
+    Generate a UNIFIED PDF report for all scenario types.
+    """
+    # Auto-detect scenario type if not provided
+    if not scenario_type:
+        scenario_type = detect_scenario_type(scenario, ai_role, role)
+    
+    print(f"Generating Unified PDF Report (scenario_type: {scenario_type})...")
     
     # Analyze data or use precomputed
     if precomputed_data:
         data = precomputed_data
-        if 'mode' not in data: data['mode'] = mode
+        if 'scenario_type' not in data: 
+            data['scenario_type'] = scenario_type
     else:
         print("Generating new report data...")
-        data = analyze_full_report_data(transcript, role, ai_role, scenario, framework, mode)
+        data = analyze_full_report_data(transcript, role, ai_role, scenario, framework, mode, scenario_type)
     
-    # Sanitize data
-    def sanitize_data(obj):
+    # Sanitize data for PDF
+    def sanitize_data_recursive(obj):
         if isinstance(obj, str):
             return sanitize_text(obj)
         elif isinstance(obj, dict):
-            return {k: sanitize_data(v) for k, v in obj.items()}
+            return {k: sanitize_data_recursive(v) for k, v in obj.items()}
         elif isinstance(obj, list):
-            return [sanitize_data(item) for item in obj]
+            return [sanitize_data_recursive(item) for item in obj]
         return obj
     
-    data = sanitize_data(data)
+    data = sanitize_data_recursive(data)
     
     pdf = DashboardPDF()
+    pdf.set_scenario_type(scenario_type)
     pdf.add_page()
     
-    # Enhanced banner with more context
-    meta = data.get('meta', {})
-    pdf.draw_banner(meta, mode=mode)
+    # Get scenario_type from data if available
+    scenario_type = data.get('scenario_type', scenario_type)
     
-    if mode == "evaluation":
-        # 1️⃣ ASSESSMENT MODE - Enhanced Content
+    # 1. Banner with summary
+    meta = data.get('meta', {})
+    pdf.draw_banner(meta, scenario_type=scenario_type)
+    
+    # 2. Executive Summary
+    exec_summary = data.get('executive_summary', {})
+    if exec_summary:
+        pdf.draw_executive_summary(exec_summary)
+    
+    # 3. Conversation Analytics
+    analytics = data.get('conversation_analytics', {})
+    if analytics:
+        pdf.draw_conversation_analytics(analytics)
+    
+    # 4. Skill Analysis (Unified Table + Chart)
+    scores = data.get('skill_analysis', []) or data.get('skill_dimension_scores', [])
+    if scores:
+        has_scores = any('score' in s for s in scores)
+        # Always use draw_assessment_table, toggling score column
+        pdf.draw_assessment_table(scores, show_scores=has_scores)
         
-        # Conversation Analytics (NEW)
-        analytics = data.get('conversation_analytics', {})
-        if analytics:
-            pdf.draw_conversation_analytics(analytics)
-        
-        # Enhanced skill assessment
-        scores = data.get('skill_dimension_scores', [])
-        if scores:
-            pdf.draw_assessment_table(scores)
+        if has_scores:
             pdf.draw_score_chart(scores)
+    
+    # 5. Tactical Observations
+    tactical = data.get('tactical_observations', {})
+    if tactical:
+        pdf.draw_tactical_observations(tactical)
+    
+    # 6. Strengths
+    strengths = data.get('observed_strengths', [])
+    if strengths:
+        pdf.draw_observed_strengths(strengths)
+    
+    # 7. Growth Opportunities
+    opportunities = data.get('growth_opportunities', [])
+    if opportunities:
+        pdf.draw_coaching_opportunities(opportunities)
+    
+    # 8. Personalized Recommendations
+    recs = data.get('personalized_recommendations', {})
+    if recs:
+        pdf.draw_personalized_recommendations(recs)
         
-        # Enhanced tactical observations
-        tactical = data.get('tactical_observations', {})
-        if tactical:
-            pdf.draw_tactical_observations(tactical)
-        
-        # Strengths and opportunities
-        strengths = data.get('observed_strengths', [])
-        if strengths:
-            pdf.draw_observed_strengths(strengths)
-        
-        opportunities = data.get('growth_opportunities', [])
-        if opportunities:
-            pdf.draw_coaching_opportunities(opportunities)
-        
-        # Personalized Learning Path (NEW)
-        learning_path = data.get('personalized_learning_path', [])
-        if learning_path:
-            pdf.draw_learning_path(learning_path)
-        
-        # Enhanced manager recommendations
-        recs = data.get('manager_recommendations', {})
-        if recs:
-            pdf.draw_manager_recommendations(recs)
-        
-    else:
-        # 2️⃣ LEARNING MODE - Enhanced Content
-        
-        # Enhanced key insights with self-awareness
-        insights = data.get('key_insights', [])
-        if insights:
-            pdf.draw_behavioral_sidebar(insights)
-        
-        # Mindset Shifts (NEW)
-        shifts = data.get('mindset_shifts', [])
-        if shifts:
-            pdf.draw_mindset_shifts(shifts)
-        
-        # Enhanced reflective questions
-        questions = data.get('reflective_questions', [])
-        if questions:
-            pdf.draw_reflection_guide(questions)
-        
-        # Enhanced skill focus areas
-        skills = data.get('skill_focus_areas', [])
-        if skills:
-            pdf.draw_skill_focus(skills)
-        
-        # Curiosity Builders (NEW)
-        builders = data.get('curiosity_builders', [])
-        if builders:
-            pdf.draw_curiosity_builders(builders)
-        
-        # Enhanced practice plan
-        practice = data.get('practice_plan', [])
-        if practice:
-            pdf.draw_practice_prompts(practice)
-        
-        # Reflection Journal Prompts (NEW)
-        prompts = data.get('reflection_journal_prompts', [])
-        if prompts:
-            pdf.draw_reflection_prompts(prompts)
-        
-        # Learning outcome
-        outcome = data.get('learning_outcome', '')
-        if outcome:
-            pdf.draw_learning_outcome(outcome)
-
+    # 9. Learning Outcome (Legacy/Reflection)
+    outcome = data.get('learning_outcome', '')
+    if outcome:
+        pdf.draw_learning_outcome(outcome)
+    
     pdf.output(filename)
-    print(f"✅ Enhanced {mode} report saved: {filename}")
+    print(f"✅ Unified report saved: {filename} (scenario: {scenario_type})")

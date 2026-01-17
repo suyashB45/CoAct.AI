@@ -33,7 +33,8 @@ const DEFAULT_SCENARIOS = [
                 scenario: "CONTEXT: The conversation takes place inside a retail store. The staff member's recent performance has dropped: Missed sales targets, Low energy on the floor, Poor customer engagement. The manager is initiating a coaching conversation, not a disciplinary one. \n\nAI BEHAVIOR: Start with mild defensiveness (justification, hesitation). Only become more open if the manager shows empathy, looks for root causes, and avoids blame. If the manager is directive or accusatory, remain closed.",
                 icon: "Users",
                 output_type: "scored_report",
-                mode: "evaluation"
+                mode: "evaluation",
+                scenario_type: "coaching"
             },
             {
                 title: "Scenario 2: Low-Price Negotiation",
@@ -43,7 +44,8 @@ const DEFAULT_SCENARIOS = [
                 scenario: "CONTEXT: Customer is interested in purchasing a high-value product but has concerns: Price is too high, Comparing with competitor offers, Asking for discounts or add-ons. \n\nAI BEHAVIOR: Be a curious but cautious customer. Push back on price. Test the salesperson's value explanation. Become more agreeable ONLY if value is demonstrated well. If they discount too early, push for more.",
                 icon: "ShoppingCart",
                 output_type: "scored_report",
-                mode: "evaluation"
+                mode: "evaluation",
+                scenario_type: "negotiation"
             },
             {
                 title: "Scenario 3: Learning Reflection",
@@ -53,7 +55,8 @@ const DEFAULT_SCENARIOS = [
                 scenario: "CONTEXT: The user will explain how they handled a recent customer interaction (or simulate a short one). \n\nAI BEHAVIOR: Do NOT judge or score. Use reflection, curiosity, and learning prompts. Demonstrate 'how to think', not 'what to say'. Guide them to realize their own patterns.",
                 icon: "GraduationCap",
                 output_type: "learning_plan",
-                mode: "coaching"
+                mode: "coaching",
+                scenario_type: "reflection"
             }
         ]
     }
@@ -62,7 +65,7 @@ const DEFAULT_SCENARIOS = [
 export default function Practice() {
     const navigate = useNavigate()
 
-    const [sessionMode, setSessionMode] = useState<"coaching" | "evaluation">("coaching")
+    // No longer need sessionMode - scenario_type is auto-detected
 
     const [customRole, setCustomRole] = useState("")
     const [customAiRole, setCustomAiRole] = useState("")
@@ -90,7 +93,7 @@ export default function Practice() {
         role: string
         ai_role: string
         scenario: string
-        mode?: "coaching" | "evaluation"
+        scenario_type?: string
     }) => {
         setLoading(true)
         try {
@@ -103,7 +106,7 @@ export default function Practice() {
                     ai_role: data.ai_role,
                     scenario: data.scenario,
                     framework: 'auto',  // AI will automatically choose the best framework
-                    mode: data.mode || sessionMode // Pass specific mode if defined, else use toggle
+                    scenario_type: data.scenario_type // Let backend auto-detect if not provided
                 })
             })
 
@@ -126,7 +129,7 @@ export default function Practice() {
                     transcript: [{ role: "assistant", content: summary }],
                     sessionId: session_id,
                     completed: false,
-                    mode: sessionMode
+                    scenario_type: result.scenario_type || 'custom'
                 }),
             )
 
@@ -218,10 +221,29 @@ export default function Practice() {
                                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {category.scenarios.map((scenario: any, sIdx: number) => {
                                             const Icon = ICON_MAP[scenario.icon] || Sparkles
-                                            const isAssessment = scenario.output_type === 'scored_report'
-                                            const modeLabel = isAssessment ? "Assessment Mode" : "Learning Mode"
-                                            const ModeIcon = isAssessment ? Swords : GraduationCap
-                                            const badgeColor = isAssessment ? "bg-rose-500/20 text-rose-300 border-rose-500/30" : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                            // Use scenario_type for badge display
+                                            const scenarioType = scenario.scenario_type || 'custom'
+                                            const typeLabels: any = {
+                                                'coaching': 'Coaching',
+                                                'negotiation': 'Negotiation',
+                                                'reflection': 'Reflection',
+                                                'custom': 'Custom'
+                                            }
+                                            const typeColors: any = {
+                                                'coaching': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+                                                'negotiation': 'bg-green-500/20 text-green-300 border-green-500/30',
+                                                'reflection': 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+                                                'custom': 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                            }
+                                            const typeIcons: any = {
+                                                'coaching': Users,
+                                                'negotiation': ShoppingCart,
+                                                'reflection': GraduationCap,
+                                                'custom': Sparkles
+                                            }
+                                            const modeLabel = typeLabels[scenarioType] || 'Custom'
+                                            const ModeIcon = typeIcons[scenarioType] || Sparkles
+                                            const badgeColor = typeColors[scenarioType] || typeColors['custom']
 
                                             return (
                                                 <div
@@ -230,7 +252,7 @@ export default function Practice() {
                                                         role: scenario.user_role,
                                                         ai_role: scenario.ai_role,
                                                         scenario: scenario.scenario,
-                                                        mode: scenario.mode
+                                                        scenario_type: scenario.scenario_type
                                                     })}
                                                     className="group relative p-6 bg-slate-900/40 hover:bg-slate-800/60 border border-white/5 hover:border-blue-500/30 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
                                                 >
@@ -269,41 +291,7 @@ export default function Practice() {
                                     <Sparkles className="w-4 h-4" /> AI Sandbox
                                 </div>
                                 <h2 className="text-3xl font-bold text-white mb-3">Design Your Scenario</h2>
-                                <p className="text-slate-400 text-lg mb-8">Describe any situation, and our AI will improvise the role.</p>
-
-                                {/* Mode Toggle - ONLY for Custom Mode */}
-                                <div className="inline-flex p-1 bg-slate-950/50 rounded-xl border border-white/10 relative mb-8">
-                                    <button
-                                        onClick={() => setSessionMode("coaching")}
-                                        className={`relative px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${sessionMode === "coaching" ? "text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
-                                    >
-                                        {sessionMode === "coaching" && (
-                                            <motion.div
-                                                layoutId="mode-highlight"
-                                                className="absolute inset-0 bg-blue-600 rounded-lg"
-                                                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                                            />
-                                        )}
-                                        <span className="relative z-10 flex items-center gap-2">
-                                            <GraduationCap className="w-4 h-4" /> Learning Mode
-                                        </span>
-                                    </button>
-                                    <button
-                                        onClick={() => setSessionMode("evaluation")}
-                                        className={`relative px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${sessionMode === "evaluation" ? "text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
-                                    >
-                                        {sessionMode === "evaluation" && (
-                                            <motion.div
-                                                layoutId="mode-highlight"
-                                                className="absolute inset-0 bg-rose-600 rounded-lg"
-                                                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                                            />
-                                        )}
-                                        <span className="relative z-10 flex items-center gap-2">
-                                            <Swords className="w-4 h-4" /> Assessment Mode
-                                        </span>
-                                    </button>
-                                </div>
+                                <p className="text-slate-400 text-lg mb-8">Describe any situation, and our AI will improvise the role. The report type will be auto-detected.</p>
 
                                 <div className="text-left bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm">
                                     <p className="text-amber-300 font-semibold mb-2">💡 Tip: For best results, include:</p>

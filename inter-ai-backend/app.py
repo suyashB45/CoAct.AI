@@ -17,7 +17,7 @@ load_dotenv()
 # Custom Modules & Setup
 # ---------------------------------------------------------
 try:
-    from cli_report import generate_report, llm_reply, analyze_full_report_data
+    from cli_report import generate_report, llm_reply, analyze_full_report_data, detect_scenario_type
 except ImportError as e:
     print(f"CRITICAL ERROR: Failed to import cli_report modules: {e}")
     import traceback
@@ -25,6 +25,7 @@ except ImportError as e:
     def generate_report(*args, **kwargs): pass
     def llm_reply(messages, **kwargs): return "{}"
     def analyze_full_report_data(*args, **kwargs): return {}
+    def detect_scenario_type(*args, **kwargs): return "custom"
 
 # Database Models (optional - fallback to in-memory if unavailable)
 USE_DATABASE = False
@@ -627,15 +628,27 @@ def start_session():
     ai_role = data.get("ai_role")
     scenario = data.get("scenario")
     framework = data.get("framework", "auto")
-    mode = data.get("mode")
+    
+    # Support both old 'mode' and new 'scenario_type' parameters
+    scenario_type = data.get("scenario_type")
+    mode = data.get("mode")  # Legacy support
     
     if not role or not ai_role or not scenario: 
         return jsonify({"error": "Missing fields"}), 400
 
-    # Auto-detect mode if not explicitly provided
-    if not mode or mode == "auto":
-        mode = detect_session_mode(scenario, ai_role)
-        print(f"📋 Session mode set to: {mode}")
+    # Auto-detect scenario_type if not explicitly provided
+    if not scenario_type:
+        scenario_type = detect_scenario_type(scenario, ai_role, role)
+    print(f"📋 Session scenario_type set to: {scenario_type}")
+    
+    # Map scenario_type to mode for backward compatibility with roleplay prompts
+    mode_map = {
+        "coaching": "evaluation",      # Coaching scenarios get scores
+        "negotiation": "evaluation",   # Negotiation scenarios get scores
+        "reflection": "coaching",      # Reflection scenarios are qualitative
+        "custom": "coaching"           # Custom scenarios default to coaching style
+    }
+    mode = mode_map.get(scenario_type, "coaching")
 
     # Handle 'auto' framework selection
     if framework == "auto" or framework == "AUTO":
@@ -650,7 +663,7 @@ def start_session():
     summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode), max_tokens=150)
     summary = sanitize_llm_output(summary)
     
-    # Store session in memory
+    # Store session in memory with scenario_type
     session_data = {
         "id": session_id,
         "created_at": dt.datetime.now().isoformat(),
@@ -658,7 +671,8 @@ def start_session():
         "ai_role": ai_role,
         "scenario": scenario,
         "framework": json.dumps(framework) if isinstance(framework, list) else framework,
-        "mode": mode,
+        "scenario_type": scenario_type,  # NEW: scenario-based report type
+        "mode": mode,  # Legacy: kept for backward compatibility
         "transcript": [{"role": "assistant", "content": summary}],
         "report_data": {},
         "completed": False,
@@ -670,7 +684,7 @@ def start_session():
     # Save to database
     save_session_to_db(session_id, session_data)
 
-    return jsonify({"session_id": session_id, "summary": summary, "framework": framework})
+    return jsonify({"session_id": session_id, "summary": summary, "framework": framework, "scenario_type": scenario_type})
 
 @app.post("/api/session/<session_id>/chat")
 def chat(session_id: str):
@@ -753,11 +767,13 @@ def complete_session(session_id: str):
     else:
         fw_display = sess["framework"]
 
-    # Generate report data if not present
+    # Get scenario_type (new) or fallback to mode (legacy)
+    scenario_type = sess.get("scenario_type")
     mode = sess.get("mode", "coaching")
     
+    # Generate report data if not present
     if not sess.get("report_data"):
-        print(f"Generating report data for {session_id}...")
+        print(f"Generating report data for {session_id} (scenario_type: {scenario_type})...")
         try:
             data = analyze_full_report_data(
                 sess["transcript"], 
@@ -765,14 +781,15 @@ def complete_session(session_id: str):
                 sess["ai_role"], 
                 sess["scenario"],
                 fw_display,
-                mode=mode
+                mode=mode,
+                scenario_type=scenario_type
             )
             sess["report_data"] = data
         except Exception as e:
             print(f"Error generating data: {e}")
             return jsonify({"error": str(e)}), 500
     
-    # Generate PDF
+    # Generate PDF with unified structure
     generate_report(
         sess["transcript"], 
         sess["role"], 
@@ -781,13 +798,14 @@ def complete_session(session_id: str):
         fw_display, 
         filename=report_path,
         mode=mode,
-        precomputed_data=sess["report_data"]
+        precomputed_data=sess["report_data"],
+        scenario_type=scenario_type
     )
     
     sess["completed"] = True
     sess["report_file"] = report_path
     
-    return jsonify({"message": "Report generated", "report_file": report_path})
+    return jsonify({"message": "Report generated", "report_file": report_path, "scenario_type": scenario_type})
 
 @app.get("/api/report/<session_id>")
 def view_report(session_id: str):
@@ -812,10 +830,12 @@ def get_report_data(session_id: str):
         response = sess["report_data"].copy()
         response["transcript"] = sess["transcript"]
         response["scenario"] = sess["scenario"] or "No context available."
+        response["scenario_type"] = sess.get("scenario_type", response.get("scenario_type", "custom"))
         return jsonify(response)
         
     # Generate new data if not present
-    print(f"Generating report data for {session_id}...")
+    scenario_type = sess.get("scenario_type")
+    print(f"Generating report data for {session_id} (scenario_type: {scenario_type})...")
     try:
         try:
             framework_data = json.loads(sess["framework"]) if sess["framework"] and sess["framework"].startswith("[") else sess["framework"]
@@ -831,13 +851,15 @@ def get_report_data(session_id: str):
             sess["ai_role"], 
             sess["scenario"],
             fw_arg,
-            mode=mode
+            mode=mode,
+            scenario_type=scenario_type
         )
         sess["report_data"] = data
         
         response = data.copy()
         response["transcript"] = sess["transcript"]
         response["scenario"] = sess["scenario"] or "No context available."
+        response["scenario_type"] = scenario_type or data.get("scenario_type", "custom")
         return jsonify(response)
     except Exception as e:
         print(f"Error generating report data: {e}")
@@ -880,7 +902,7 @@ def clear_sessions():
 @app.get("/api/scenarios")
 def get_scenarios():
     """Return practice scenarios for coaching sessions."""
-    # Hardcoded scenarios (no database)
+    # Hardcoded scenarios with scenario_type for unified report generation
     SCENARIO_CATEGORIES = [
         {
             "name": "Exercise Test Scenarios",
@@ -894,8 +916,8 @@ def get_scenarios():
                     "user_role": "Retail Store Manager",
                     "scenario": "CONTEXT: The conversation takes place inside a retail store. The staff member's recent performance has dropped: Missed sales targets, Low energy on the floor, Poor customer engagement. The manager is initiating a coaching conversation, not a disciplinary one. \n\nAI BEHAVIOR: Start with mild defensiveness (justification, hesitation). Only become more open if the manager shows empathy, looks for root causes, and avoids blame. If the manager is directive or accusatory, remain closed.",
                     "icon": "Users",
-                    "output_type": "scored_report",
-                    "mode": "evaluation"
+                    "scenario_type": "coaching",
+                    "include_scores": True
                 },
                 {
                     "title": "Scenario 2: Low-Price Negotiation",
@@ -905,8 +927,8 @@ def get_scenarios():
                     "user_role": "Salesperson",
                     "scenario": "CONTEXT: Customer is interested in purchasing a high-value product but has concerns: Price is too high, Comparing with competitor offers, Asking for discounts or add-ons. \n\nAI BEHAVIOR: Be a curious but cautious customer. Push back on price. Test the salesperson's value explanation. Become more agreeable ONLY if value is demonstrated well. If they discount too early, push for more.",
                     "icon": "ShoppingCart",
-                    "output_type": "scored_report",
-                    "mode": "evaluation"
+                    "scenario_type": "negotiation",
+                    "include_scores": True
                 },
                 {
                     "title": "Scenario 3: Learning Reflection",
@@ -916,8 +938,8 @@ def get_scenarios():
                     "user_role": "Retail Staff",
                     "scenario": "CONTEXT: The user will explain how they handled a recent customer interaction (or simulate a short one). \n\nAI BEHAVIOR: Do NOT judge or score. Use reflection, curiosity, and learning prompts. Demonstrate 'how to think', not 'what to say'. Guide them to realize their own patterns.",
                     "icon": "GraduationCap",
-                    "output_type": "learning_plan",
-                    "mode": "coaching"
+                    "scenario_type": "reflection",
+                    "include_scores": False
                 }
             ]
         },

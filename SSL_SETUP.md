@@ -1,16 +1,4 @@
-# SSL Deployment Instructions
 
-## Quick Setup on Azure VM
-
-### 1. Push Changes to Git
-```bash
-git add .
-git commit -m "Add SSL support with Let's Encrypt"
-git push
-```
-
-### 2. On Your Azure VM
-```bash
 # Pull latest changes
 cd /path/to/CoAct.AI
 git pull
