@@ -1,18 +1,14 @@
 services:
   frontend:
-    build:
-      context: ./inter-ai-frontend
-      dockerfile: Dockerfile
-      args:
-        # Empty = uses relative URLs, nginx proxies to backend
-        VITE_API_URL: ""
+    build: ./inter-ai-frontend
     ports:
-      - "0.0.0.0:80:80"
+      - "80:80"
     environment:
+      # Use relative paths so Nginx proxies API calls
       - VITE_API_URL=
     depends_on:
       - backend
-    restart: unless-stopped
+    restart: always
 
   backend:
     build:
@@ -48,7 +44,7 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-2005}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CoAct_Secure_DB_2026!}
       - POSTGRES_DB=${POSTGRES_DB:-coact_ai}
     volumes:
       - postgres_data:/var/lib/postgresql/data
