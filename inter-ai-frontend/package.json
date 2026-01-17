@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "concurrently -n \"FRONT,BACK\" -c \"cyan,yellow\" \"npm run dev\" \"cd backend && venv\\\\Scripts\\\\python app.py\"",
+    "dev:all": "concurrently -n \"FRONT,BACK\" -c \"cyan,yellow\" \"npm run dev\" \"cd ../inter-ai-backend && venv\\\\Scripts\\\\python app.py\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "node server.js"
