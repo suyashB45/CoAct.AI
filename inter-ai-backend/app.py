@@ -27,14 +27,14 @@ except ImportError as e:
     def analyze_full_report_data(*args, **kwargs): return {}
 
 # Database Models (optional - fallback to in-memory if unavailable)
-USE_DATABASE = True
-try:
-    from models import init_db, get_session_by_id, create_session, update_session, save_report, Session, SessionLocal
-    init_db()
-    print("✅ Database connection established")
-except Exception as e:
-    print(f"⚠️ Database not available, using in-memory storage: {e}")
-    USE_DATABASE = False
+USE_DATABASE = False
+# try:
+#     from models import init_db, get_session_by_id, create_session, update_session, save_report, Session, SessionLocal
+#     init_db()
+#     print("✅ Database connection established")
+# except Exception as e:
+#     print(f"⚠️ Database not available, using in-memory storage: {e}")
+#     USE_DATABASE = False
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 flask_cors.CORS(app)

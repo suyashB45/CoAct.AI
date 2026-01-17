@@ -6,6 +6,7 @@ import { Clock, User, Bot, CheckCircle2, PlayCircle, Calendar, Trophy } from "lu
 import { motion } from "framer-motion"
 
 import Navigation from "../components/landing/Navigation"
+import { getApiUrl } from "../lib/api"
 
 interface SessionItem {
     id: string
@@ -27,7 +28,7 @@ export default function SessionHistory() {
         const fetchSessions = async () => {
             try {
                 // Fetch from backend
-                const res = await fetch('http://localhost:8000/api/sessions')
+                const res = await fetch(getApiUrl('/api/sessions'))
                 if (!res.ok) throw new Error('Failed to fetch sessions')
 
                 const data = await res.json()

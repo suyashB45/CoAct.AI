@@ -14,6 +14,7 @@ import {
     DollarSign, Users, ShoppingCart, GraduationCap, AlertTriangle
 } from "lucide-react"
 import Navigation from "../components/landing/Navigation"
+import { getApiUrl } from "../lib/api"
 
 const ICON_MAP: any = {
     Users, ShoppingCart, GraduationCap, AlertTriangle, DollarSign, UserCog
@@ -73,7 +74,7 @@ export default function Practice() {
     useEffect(() => {
         const fetchScenarios = async () => {
             try {
-                const res = await fetch('http://localhost:8000/api/scenarios')
+                const res = await fetch(getApiUrl('/api/scenarios'))
                 if (res.ok) {
                     const data = await res.json()
                     setCategories(data)
@@ -94,7 +95,7 @@ export default function Practice() {
         setLoading(true)
         try {
             // Call backend to create session
-            const response = await fetch('http://localhost:8000/session/start', {
+            const response = await fetch(getApiUrl('/session/start'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -168,7 +169,7 @@ export default function Practice() {
                         transition={{ delay: 0.2 }}
                         className="inline-flex items-center gap-2 mb-6 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-blue-300 backdrop-blur-md"
                     >
-                        <Sparkles className="w-4 h-4 animate-pulse" />
+                        <Loader2 className="w-4 h-4 animate-pulse" />
                         <span>Interactive Roleplay Studio</span>
                     </motion.div>
 

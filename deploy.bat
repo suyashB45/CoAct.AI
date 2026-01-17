@@ -28,9 +28,9 @@ echo    Deployment Complete!
 echo ========================================
 echo.
 echo Access your application:
-echo   Frontend: http://localhost:3000
-echo   Backend:  http://localhost:8000
-echo   Public:   http://coactai.work.gd:3000
+echo   Frontend: http://localhost
+echo   Public:   http://coactai.centralindia.cloudapp.azure.com
+echo   API:      http://coactai.centralindia.cloudapp.azure.com/api/
 echo.
 echo Commands:
 echo   View logs:    docker-compose logs -f
