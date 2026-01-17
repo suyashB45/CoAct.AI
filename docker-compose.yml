@@ -4,11 +4,12 @@ services:
       context: ./inter-ai-frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://coactai.centralindia.cloudapp.azure.com:8000
+        # Empty = uses relative URLs, nginx proxies to backend
+        VITE_API_URL: ""
     ports:
-      - "0.0.0.0:3000:80"
+      - "0.0.0.0:80:80"
     environment:
-      - VITE_API_URL=http://coactai.centralindia.cloudapp.azure.com:8000
+      - VITE_API_URL=
     depends_on:
       - backend
     restart: unless-stopped
@@ -17,8 +18,9 @@ services:
     build:
       context: ./inter-ai-backend
       dockerfile: Dockerfile
-    ports:
-      - "0.0.0.0:8000:8000"
+    # No external port - nginx proxies all requests
+    expose:
+      - "8000"
     volumes:
       # Mount reports directory for persistent storage
       - ./inter-ai-backend/reports:/app/reports
