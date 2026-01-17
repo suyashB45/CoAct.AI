@@ -4,11 +4,11 @@ services:
       context: ./inter-ai-frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://20.197.8.19:8000
+        VITE_API_URL: http://coactai.work.gd:8000
     ports:
       - "0.0.0.0:3000:80"
     environment:
-      - VITE_API_URL=http://20.197.8.19:8000
+      - VITE_API_URL=http://coactai.work.gd:8000
     depends_on:
       - backend
     restart: unless-stopped
