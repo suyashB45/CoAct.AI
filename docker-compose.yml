@@ -3,37 +3,38 @@ services:
     build: ./inter-ai-frontend
     ports:
       - "80:80"
+      - "443:443"
     volumes:
+      - ./inter-ai-frontend/dist:/usr/share/nginx/html:ro
       - ./inter-ai-frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
     depends_on:
       backend:
         condition: service_healthy
     restart: always
-    # Frontend health check
     healthcheck:
       test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-    # Logging for production monitoring
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+    # Reload nginx when certificates are renewed
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
 
   backend:
     build:
       context: ./inter-ai-backend
       dockerfile: Dockerfile
-    # No external port - nginx proxies all requests
     expose:
       - "8000"
     volumes:
-      # Mount reports directory for persistent storage
       - ./inter-ai-backend/reports:/app/reports
-      # Mount static audio files
       - ./inter-ai-backend/static:/app/static
     environment:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
@@ -46,16 +47,23 @@ services:
       - PYTHONPATH=/app
       - FLASK_ENV=production
     restart: always
-    # Backend health check
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    # Logging for production monitoring
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+  certbot:
+    image: certbot/certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # Auto-renew certificates every 12 hours
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
