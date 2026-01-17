@@ -3,12 +3,25 @@ services:
     build: ./inter-ai-frontend
     ports:
       - "80:80"
-    environment:
-      # Use relative paths so Nginx proxies API calls
-      - VITE_API_URL=
+    volumes:
+      - ./inter-ai-frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: always
+    # Frontend health check
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Logging for production monitoring
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   backend:
     build:
@@ -30,7 +43,19 @@ services:
       - WHISPER_DEPLOYMENT_NAME=${WHISPER_DEPLOYMENT_NAME:-whisper}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
-      # Database removed
       - PYTHONPATH=/app
       - FLASK_ENV=production
-    restart: unless-stopped
+    restart: always
+    # Backend health check
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # Logging for production monitoring
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

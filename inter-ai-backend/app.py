@@ -98,6 +98,7 @@ def save_session_to_db(session_id: str, session_data: dict):
 # Configuration & Paths
 # ---------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 QUESTIONS_FILE = os.path.join(BASE_DIR, "framework_questions.json")
 
 connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
