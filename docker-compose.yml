@@ -4,20 +4,21 @@ services:
       context: ./inter-ai-frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8000
+        VITE_API_URL: http://20.197.8.19:8000
     ports:
-      - "3000:80"
+      - "0.0.0.0:3000:80"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://20.197.8.19:8000
     depends_on:
       - backend
+    restart: unless-stopped
 
   backend:
     build:
       context: ./inter-ai-backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     volumes:
       # Mount reports directory for persistent storage
       - ./inter-ai-backend/reports:/app/reports
@@ -27,8 +28,34 @@ services:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o-mini}
-      - TTS_DEPLOYMENT_NAME=${TTS_DEPLOYMENT_NAME:-tts-1}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4.1-mini}
+      - WHISPER_DEPLOYMENT_NAME=${WHISPER_DEPLOYMENT_NAME:-whisper}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - PYTHONPATH=/app
       - FLASK_ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-2005}
+      - POSTGRES_DB=${POSTGRES_DB:-coact_ai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-coact_ai}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
