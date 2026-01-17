@@ -324,6 +324,20 @@ Current turn: {turn_count + 1}
 AUDIO_DIR = os.path.join(BASE_DIR, "static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
+@app.route("/api/health")
+def health_check():
+    """Health check endpoint for VM monitoring"""
+    return jsonify({
+        "status": "healthy",
+        "timestamp": dt.datetime.now().isoformat(),
+        "version": "enhanced-reports-v1.0",
+        "services": {
+            "llm": "connected" if client else "disconnected",
+            "reports": "available",
+            "sessions": len(SESSIONS)
+        }
+    })
+
 @app.route('/static/audio/<path:filename>')
 def serve_audio(filename):
     return send_file(os.path.join(AUDIO_DIR, filename))

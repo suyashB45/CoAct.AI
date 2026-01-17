@@ -18,6 +18,17 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    volumes:
+      # Mount reports directory for persistent storage
+      - ./inter-ai-backend/reports:/app/reports
+      # Mount static audio files
+      - ./inter-ai-backend/static:/app/static
     environment:
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o-mini}
+      - TTS_DEPLOYMENT_NAME=${TTS_DEPLOYMENT_NAME:-tts-1}
+      - PYTHONPATH=/app
+      - FLASK_ENV=production
+    restart: unless-stopped
