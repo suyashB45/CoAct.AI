@@ -872,39 +872,7 @@ class DashboardPDF(FPDF):
 
 
 
-        score = readiness.get('score', 0)
-        next_level = sanitize_text(readiness.get('next_level_requirements', ''))
-        timeline = sanitize_text(readiness.get('estimated_timeline', ''))
-        
-        # Main readiness display
-        self.set_font('Arial', 'B', 12)
-        self.set_text_color(*COLORS['primary'])
-        self.cell(0, 10, f"OVERALL READINESS: {label} ({score}/10)", 0, 1)
-        
-        # Next level requirements (NEW)
-        if next_level:
-            self.set_fill_color(248, 250, 252) # Slate 50
-            self.rect(10, self.get_y(), 190, 25, 'F')
-            
-            self.set_xy(15, self.get_y() + 5)
-            self.set_font('Arial', 'B', 9)
-            self.set_text_color(*COLORS['accent'])
-            self.cell(0, 5, "NEXT LEVEL REQUIREMENTS:", 0, 1)
-            
-            self.set_x(15)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(180, 5, next_level)
-            
-            if timeline:
-                self.set_x(15)
-                self.set_font('Arial', 'I', 8)
-                self.set_text_color(*COLORS['text_light'])
-                self.cell(0, 5, f"Estimated Timeline: {timeline}", 0, 1)
-            
-            self.set_y(self.get_y() + 5)
-        
-        self.ln(5)
+
 
 
 
