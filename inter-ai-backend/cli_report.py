@@ -64,18 +64,19 @@ COLORS = {
     'rewrite_good': (236, 253, 245), # Emerald 50
     'bad_bg': (254, 226, 226),       # Red 100
     'grey_text': (100, 116, 139),    # Slate 500
-    'grey_bg': (241, 245, 249)       # Slate 100
+    'grey_bg': (241, 245, 249),      # Slate 100
+    'purple': (139, 92, 246)         # Violet 500
 }
 
 # UNIVERSAL REPORT STRUCTURE DEFINITIONS
 SCENARIO_TITLES = {
-    # Headers are now standardized across the 3 layers, but we keep this for any specific UI labels if needed
     "universal": {
-        "layer_1": "THE PULSE",
-        "layer_2": "THE NARRATIVE",
-        "layer_3": "THE BLUEPRINT"
+        "pulse": "THE PULSE",
+        "narrative": "THE NARRATIVE",
+        "blueprint": "THE BLUEPRINT"
     }
 }
+
 
 def sanitize_text(text):
     if text is None: return ""
@@ -185,10 +186,7 @@ def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
 
 def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None):
     """
-    Generate report data using the UNIVERSAL MODULAR STRUCTURE:
-    1. The Pulse (Metrics)
-    2. The Narrative (Insights)
-    3. The Blueprint (Development)
+    Generate report data using SCENARIO-SPECIFIC structures.
     """
     # Auto-detect scenario type if not provided
     if not scenario_type:
@@ -197,129 +195,138 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     # Extract only user messages for focused analysis
     user_msgs = [t for t in transcript if t['role'] == 'user']
     
+    # Base metadata
+    meta = {
+        "scenario_id": scenario_type,
+        "outcome_status": "Completed", 
+        "overall_grade": "N/A",
+        "summary": "Session analysis.",
+        "scenario_type": scenario_type
+    }
+
     if not user_msgs:
-        return {
-            "meta": {
-                "outcome_status": "Not Started",
-                "overall_grade": "N/A",
-                "summary": "Session started but no interaction recorded.",
-                "scenario_type": scenario_type
-            },
-            "layer_1_pulse": [],
-            "layer_2_narrative": {},
-            "layer_3_blueprint": {}
-        }
+        meta["outcome_status"] = "Not Started"
+        meta["summary"] = "Session started but no interaction recorded."
+        return { "meta": meta, "type": scenario_type }
 
     # -------------------------------------------------------------
     # BUILD SPECIFIC PROMPTS BASED ON SCENARIO TYPE
     # -------------------------------------------------------------
     
-    specific_instruction = ""
+    unified_instruction = ""
     
     if scenario_type == "coaching":
-        specific_instruction = """
-### SCENARIO 1: COACHING EFFECTIVENESS
-- **TONE**: Evaluative / Growth
-- **VERDICT LABEL**: "Coaching Efficacy"
-- **METRICS (S1 - 1-10 Scores)**:
-  1. "Listening and Empathy"
-  2. "Questioning Quality"
-  3. "Psychological Safety"
-  4. "Coaching vs. Telling"
-- **STRENGTHS & IMPROVEMENTS**:
-  - **Focus Areas**: Creating safe dialogue spaces and allowing self-reflection vs directive "telling".
+        unified_instruction = """
+### SCENARIO 1: MANAGER-STAFF COACHING
+**GOAL**: Generate a Coaching Effectiveness Report.
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "coaching", "outcome_status": "Success/Partial/Failure", "overall_grade": "X/10", "summary": "..." },
+  "type": "coaching",
+  "scorecard": [
+    { "dimension": "Listening & Empathy", "score": "X/10", "description": "..." },
+    { "dimension": "Questioning Quality", "score": "X/10", "description": "..." },
+    { "dimension": "Psychological Safety", "score": "X/10", "description": "..." },
+    { "dimension": "Coaching vs Telling", "score": "X/10", "description": "..." },
+    { "dimension": "Accountability & Closure", "score": "X/10", "description": "..." }
+  ],
+  "behavioral_signals": {
+    "manager_tone": "Supportive / Neutral / Directive",
+    "staff_defensiveness": "High -> Low",
+    "staff_openness": "Improved / Flat",
+    "emotional_safety": "Present / Partial"
+  },
+  "strengths": ["Strength 1...", "Strength 2..."],
+  "missed_opportunities": ["Missed opp 1...", "Missed opp 2..."],
+  "coaching_impact": {
+    "self_awareness_gained": "...",
+    "ownership_level": "...",
+    "change_likelihood": "..."
+  },
+  "actionable_tips": ["Tip 1...", "Tip 2...", "Tip 3..."]
+}
 """
-    elif scenario_type == "negotiation":
-        specific_instruction = """
-### SCENARIO 2: SALES AND NEGOTIATION
-- **TONE**: Results / Tactical
-- **VERDICT LABEL**: "Negotiation Power"
-- **METRICS (S2 - 1-10 Scores)**:
-  1. "Rapport Building"
-  2. "Needs Discovery"
-  3. "Objection Handling"
-  4. "Value Articulation"
-- **OBSERVATIONS**:
-  - **Focus Areas**: Developing deeper need-based questioning and delaying price discounting until value is established.
+    elif scenario_type == "negotiation": # Sales
+        unified_instruction = """
+### SCENARIO 2: SALES & NEGOTIATION
+**GOAL**: Generate a Sales Performance Report.
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "sales", "outcome_status": "Closed/Negotiating/Lost", "overall_grade": "X/10", "summary": "..." },
+  "type": "sales",
+  "scorecard": [
+    { "dimension": "Rapport Building", "score": "X/10", "description": "..." },
+    { "dimension": "Needs Discovery", "score": "X/10", "description": "..." },
+    { "dimension": "Value Articulation", "score": "X/10", "description": "..." },
+    { "dimension": "Objection Handling", "score": "X/10", "description": "..." },
+    { "dimension": "Negotiation Strategy", "score": "X/10", "description": "..." },
+    { "dimension": "Closing Readiness", "score": "X/10", "description": "..." }
+  ],
+  "simulation_analysis": {
+    "objections_raised": "Price / Comparison / Trust",
+    "objection_escalation": "Increased / Reduced",
+    "sentiment_trend": "Defensive -> Positve"
+  },
+  "what_worked": ["..."],
+  "what_limited_effectiveness": ["..."],
+  "revenue_impact": {
+    "price_risk": "...",
+    "missed_upsell": "...",
+    "trust_impact": "..."
+  },
+  "sales_recommendations": ["Rec 1...", "Rec 2..."]
+}
 """
-    elif scenario_type == "reflection":
-        specific_instruction = """
-### SCENARIO 3: SKILL DEVELOPMENT & LEARNING (NO SCORES)
-- **TONE**: Supportive / Deep
-- **VERDICT LABEL**: "Learning Insights"
-- **METRICS**: NONE. Do NOT generate scores.
-- **OUTPUT FOCUS**:
-  1. **Critical Insights**: Pattern recognition (transitioning from feature-focused to needs exploration).
-  2. **Skill Focus Areas**: Questioning techniques, Active listening, Value-based communication.
-  3. **Practice Suggestions**: Implementing conversational pauses (2-3 seconds).
-- **IMPORTANT JSON MAPPING**:
-  - Map "Critical Insights" -> to JSON field `micro_correction`
-  - Map "Skill Focus Areas" -> to JSON field `shadow_impact`
-  - Map "Practice Suggestions" -> to JSON field `homework_exercises`
-- **IMPORTANT**: Return 'layer_1_pulse' as EMPTY LIST []. Do not invent scores.
-"""
-    elif scenario_type == "deescalation":
-        specific_instruction = """
-### SCENARIO 4: DE-ESCALATION
-- **TONE**: Objective / Adaptive
-- **VERDICT LABEL**: "Goal Attainment"
-- **METRICS (S4 - 1-10 Scores)**:
-  1. "Temp. Control"
-  2. "Neutral Language"
-  3. "Solution Focus"
-  4. "Policy Flex"
+    elif scenario_type == "reflection" or scenario_type == "learning":
+        unified_instruction = """
+### SCENARIO 3: PERSONAL LEARNING PLAN (NO SCORES)
+**GOAL**: Generate a Developmental Learning Plan.
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
+  "type": "learning",
+  "context_summary": {
+    "situation": "...",
+    "challenge_area": "..."
+  },
+  "key_insights": ["Pattern observed...", "Strength present..."],
+  "reflective_questions": ["Question 1...", "Question 2..."],
+  "skill_focus_areas": ["Technique 1", "Technique 2"],
+  "behavioral_shifts": [
+    { "from": "Old behavior", "to": "New behavior" }
+  ],
+  "practice_plan": ["Experiment 1...", "Micro-habit..."],
+  "growth_outcome": "Vision of success..."
+}
 """
     else: # Custom
-        specific_instruction = """
-### CUSTOM SCENARIO
-- **TONE**: Objective / Adaptive
-- **VERDICT LABEL**: "Goal Attainment"
-- **METRICS (Custom)**: Identify the 4 most critical professional competencies for this specific scenario. Generate 1-10 scores.
-"""
-
-    unified_instruction = f"""
-### UNIVERSAL MODULAR REPORT GENERATION
-👉 **Purpose**: Generate a 3-layer report: Pulse (Metrics), Narrative (Insights), Blueprint (Development).
-- **SCENARIO TYPE**: {scenario_type.upper()}
-{specific_instruction}
-
-### OUTPUT JSON STRUCTURE:
-{{
-  "meta": {{
-    "scenario_id": "{scenario_type}",
-    "outcome_status": "Success|Partial|Failure (e.g. 'Staff motivated', 'Sale closed')",
-    "overall_grade": "A-F or 1-100",
-    "summary": "1-2 sentence context summary."
-  }},
-  
-  "layer_1_pulse": [
-    {{ "metric": "Metric Name", "score": "1-10 or Level", "insight": "Brief observation" }},
-    {{ "metric": "Metric Name", "score": "...", "insight": "..." }},
-    {{ "metric": "Metric Name", "score": "...", "insight": "..." }},
-    {{ "metric": "Metric Name", "score": "...", "insight": "..." }}
+        unified_instruction = """
+### CUSTOM SCENARIO / ROLE PLAY
+**GOAL**: Generate an Adaptive Feedback Report.
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "custom", "outcome_status": "Success/Partial", "overall_grade": "X/10", "summary": "..." },
+  "type": "custom",
+  "interaction_quality": {
+    "engagement": "High/Med/Low",
+    "tone": "...",
+    "talk_listen_ratio": "..."
+  },
+  "core_skills": [
+    { "skill": "Adaptive Skill 1", "rating": "High/Med/Low", "feedback": "..." },
+    { "skill": "Adaptive Skill 2", "rating": "...", "feedback": "..." },
+    { "skill": "Adaptive Skill 3", "rating": "...", "feedback": "..." }
   ],
-  
-  "layer_2_narrative": {{
-    "sentiment_curve": "Timeline (e.g. 'Defensive -> Curious -> Committed')",
-    "critical_pivots": {{
-        "green_light": {{ "turn": "Dialogue turn #", "event": "Trust gained when...", "quote": "User quote" }},
-        "red_light": {{ "turn": "Dialogue turn #", "event": "Leverage lost when...", "quote": "User quote" }}
-    }},
-    "think_aloud": {{
-        "context": "Context of a specific turn",
-        "thought": "What AI really thought (e.g. 'When you said 'policy', I felt ignored.')"
-    }}
-  }},
-  
-  "layer_3_blueprint": {{
-    "micro_correction": "Instead of 'X', try 'Y'.",
-    "shadow_impact": "Long-term consequence (e.g. 'Staff would quit in 3 months').",
-    "homework_exercises": ["Exercise 1", "Exercise 2", "Exercise 3"]
-  }}
-}}
+  "strengths_observed": ["..."],
+  "development_opportunities": ["..."],
+  "guidance": {
+    "continue": ["..."],
+    "adjust": ["..."],
+    "try_next": ["..."]
+  }
+}
 """
 
-    framework_context = f"Framework: {framework}" if framework else ""
 
     # Unified System Prompt
     system_prompt = (
@@ -327,12 +334,10 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         f"You are an expert Soft Skills Development Coach generating reports for 'COACT.AI'.\\n"
         f"Context: {scenario}\\n"
         f"User Role: {role} | AI Role: {ai_role}\\n"
-        f"{framework_context}\\n"
         f"{unified_instruction}\\n"
         f"### GENERAL RULES\\n"
-        "1. Be specific and citation-based (quote the user directly).\\n"
-        "2. Be constructive and actionable.\\n"
-        "3. OUTPUT MUST BE VALID JSON ONLY. No markdown, no explanations.\\n"
+        "1. Be specific and citation-based.\\n"
+        "2. OUTPUT MUST BE VALID JSON ONLY.\\n"
     )
 
     try:
@@ -350,56 +355,27 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         clean_text = response.replace("```json", "").replace("```", "").strip()
         data = json.loads(clean_text)
         
-        # Validation: Check for Universal Modular Layers
-        required_keys = ["layer_1_pulse", "layer_2_narrative", "layer_3_blueprint"]
-        missing_keys = [k for k in required_keys if k not in data]
-        if missing_keys and not data.get("meta"): # If meta exists, maybe it's a valid failure report? No, LLM should return layers.
-            # If we have mainly missing keys, assume generation failed or was cut off
-            if len(missing_keys) > 1:
-                print(f"⚠️ Invalid Report Data: Missing {missing_keys}")
-                raise ValueError("LLM response missing required Universal Report layers.")
-
-        # Add/normalize metadata
-        data['scenario_type'] = scenario_type
-        if 'meta' not in data: 
-            data['meta'] = {}
+        # Ensure meta exists
+        if 'meta' not in data: data['meta'] = {}
         data['meta']['scenario_type'] = scenario_type
-        
-        # Calculate fit_score from skill_analysis if scores are present
-        skill_analysis = data.get('skill_analysis', [])
-        if skill_analysis and any('score' in s for s in skill_analysis):
-            scores = [s.get('score', 0) for s in skill_analysis if 'score' in s]
-            if scores:
-                avg_score = sum(scores) / len(scores)
-                data['meta']['fit_score'] = avg_score / 10
-            else:
-                data['meta']['fit_score'] = 0
-        else:
-            data['meta']['fit_score'] = 0
-        
-        # Backward compatibility: map to old structure if needed
-        # skill_analysis -> skill_dimension_scores for frontend
-        if 'skill_analysis' in data and 'skill_dimension_scores' not in data:
-            data['skill_dimension_scores'] = data['skill_analysis']
-            
+        # Add type if missing
+        if 'type' not in data: data['type'] = scenario_type
+
         return data
         
     except Exception as e:
         print(f"JSON Parse Error: {e}")
-        import traceback
-        traceback.print_exc()
         return {
-            "scenario_type": scenario_type,
             "meta": {
                 "scenario_id": scenario_type,
                 "outcome_status": "Failure", 
                 "overall_grade": "F",
-                "summary": "Error generating report. Please try again."
+                "summary": "Error generating report. Please try again.",
+                "scenario_type": scenario_type
             },
-            "layer_1_pulse": [],
-            "layer_2_narrative": {},
-            "layer_3_blueprint": {}
+            "type": scenario_type
         }
+
 
 class DashboardPDF(FPDF):
     def cell(self, w, h=0, txt='', border=0, ln=0, align='', fill=False, link=''):
@@ -899,127 +875,174 @@ class DashboardPDF(FPDF):
         except:
             return 0.0
 
-    def draw_layer_1_pulse(self, pulse):
-        """Draw Layer 1: The Pulse (Metrics)"""
-        if not pulse: return
-        self.draw_section_header("LAYER 1: THE PULSE", COLORS['section_comm'])
+    # --- SCENARIO SPECIFIC DRAWING METHODS ---
+
+    def draw_scorecard(self, scorecard):
+        """Draw a standard scorecard table with zebra striping."""
+        if not scorecard: return
+        self.check_space(60)
+        self.ln(8) # Extra spacing
+        self.draw_section_header("PERFORMANCE SCORECARD", COLORS['primary'])
         
-        self.ln(2)
+        # Table Header
+        self.set_fill_color(30, 41, 59) # Dark header
+        self.set_font('Arial', 'B', 9)
+        self.set_text_color(255, 255, 255) # White text
+        self.cell(50, 9, "DIMENSION", 0, 0, 'L', True)
+        self.cell(20, 9, "SCORE", 0, 0, 'C', True)
+        self.cell(120, 9, "OBSERVATION", 0, 1, 'L', True)
         
-        # Grid layout simulation using cells
-        for metric in pulse:
-            name = sanitize_text(metric.get('metric', 'Metric'))
-            score_raw = str(metric.get('score', 'N/A'))
-            insight = sanitize_text(metric.get('insight', ''))
+        # Rows
+        for i, item in enumerate(scorecard):
+            dim = sanitize_text(item.get('dimension', ''))
+            score = str(item.get('score', 'N/A'))
+            desc = sanitize_text(item.get('description', ''))
             
-            # Metric Box
-            self.set_fill_color(248, 250, 252)
-            self.rect(self.get_x(), self.get_y(), 190, 25, 'F')
+            row_height = max(14, len(desc) // 70 * 5 + 10)
+            self.check_space(row_height)
             
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['secondary'])
-            self.cell(190, 6, name.upper(), 0, 1)
-            
-            # Score parsing and coloring
-            score_val = self._extract_score_value(score_raw)
-            if "Expert" in score_raw or score_val >= 8:
-                self.set_text_color(*COLORS['success'])
-            elif "Beginner" in score_raw or score_val <= 4:
-                self.set_text_color(*COLORS['danger'])
+            # Zebra striping
+            if i % 2 == 0:
+                self.set_fill_color(248, 250, 252) # Very light gray
             else:
-                self.set_text_color(*COLORS['warning'])
+                self.set_fill_color(255, 255, 255) # White
             
-            self.set_font('Arial', 'B', 12)
-            self.cell(190, 6, f"Score: {score_raw}", 0, 1)
-            
-            # Insight
-            self.set_font('Arial', 'I', 9)
-            self.set_text_color(*COLORS['text_light'])
-            self.multi_cell(190, 5, insight)
-            self.ln(4)
-
-    def draw_layer_2_narrative(self, narrative):
-        """Draw Layer 2: The Narrative"""
-        if not narrative: return
-        self.draw_section_header("LAYER 2: THE NARRATIVE", COLORS['section_skills'])
-        
-        # Sentiment Curve
-        if 'sentiment_curve' in narrative:
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['primary'])
-            self.cell(0, 8, "AI Sentiment Curve:", 0, 1)
-            self.set_font('Arial', '', 10)
-            self.multi_cell(0, 5, sanitize_text(narrative['sentiment_curve']))
-            self.ln(4)
-            
-        # Critical Pivots
-        pivots = narrative.get('critical_pivots', {})
-        if pivots.get('green_light'):
-            gl = pivots['green_light']
-            self.set_fill_color(*COLORS['rewrite_good'])
-            self.rect(self.get_x(), self.get_y(), 190, 20, 'F')
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['success'])
-            self.cell(190, 6, "GREEN LIGHT MOMENT", 0, 1)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(190, 5, sanitize_text(gl.get('event', '')))
-            self.ln(4)
-            
-        if pivots.get('red_light'):
-            rl = pivots['red_light']
-            self.set_fill_color(*COLORS['bad_bg'])
-            self.rect(self.get_x(), self.get_y(), 190, 20, 'F')
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['danger'])
-            self.cell(190, 6, "RED LIGHT MOMENT", 0, 1)
-            self.set_font('Arial', '', 9)
-            self.set_text_color(*COLORS['text_main'])
-            self.multi_cell(190, 5, sanitize_text(rl.get('event', '')))
-            self.ln(4)
-
-        # Think Aloud
-        if 'think_aloud' in narrative:
-            ta = narrative['think_aloud']
-            self.set_font('Arial', 'B', 10)
-            self.set_text_color(*COLORS['section_skills'])
-            self.cell(0, 8, "The 'Think-Aloud' Reveal:", 0, 1)
-            self.set_font('Arial', 'I', 9)
-            self.set_text_color(*COLORS['text_light'])
-            self.multi_cell(0, 5, f"When you said: \"{sanitize_text(ta.get('context',''))}\"")
             self.set_font('Arial', 'B', 9)
-            self.set_text_color(*COLORS['primary'])
-            self.multi_cell(0, 5, f"I thought: \"{sanitize_text(ta.get('thought',''))}\"")
-            self.ln(4)
+            self.set_text_color(*COLORS['text_main'])
+            
+            # Draw row background
+            x_start = self.get_x()
+            y_start = self.get_y()
+            self.cell(50, row_height, dim, 0, 0, 'L', True)
+            
+            # Score Color
+            try:
+                s_val = float(score.split('/')[0])
+                if s_val >= 8: self.set_text_color(*COLORS['success'])
+                elif s_val <= 5: self.set_text_color(*COLORS['danger'])
+                else: self.set_text_color(*COLORS['warning'])
+            except:
+                self.set_text_color(*COLORS['text_main'])
+                
+            self.cell(20, row_height, score, 0, 0, 'C', True)
+            
+            self.set_font('Arial', '', 9)
+            self.set_text_color(*COLORS['text_light'])
+            
+            # Multi-cell handling with background fill
+            self.set_xy(x_start + 70, y_start)
+            self.multi_cell(120, row_height, desc, border=0, align='L', fill=True)
+            
+            # Reset position for next row manually if multi_cell didn't perfectly align
+            self.set_xy(x_start, y_start + row_height)
+            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height) # Bottom border
+            self.set_text_color(*COLORS['text_main']) # Reset color
 
-    def draw_layer_3_blueprint(self, blueprint):
-        """Draw Layer 3: The Blueprint"""
-        if not blueprint: return
-        self.draw_section_header("LAYER 3: THE BLUEPRINT", COLORS['section_coach'])
+    def draw_key_value_grid(self, title, data_dict, color=COLORS['secondary']):
+        """Draw a grid of key-value pairs with better spacing."""
+        if not data_dict: return
+        self.check_space(50)
+        self.ln(8)
+        self.draw_section_header(title, color)
         
-        # Micro Correction
-        self.set_font('Arial', 'B', 10)
-        self.set_text_color(*COLORS['primary'])
-        self.cell(90, 8, "Micro-Correction:", 0, 0)
-        self.cell(90, 8, "Shadow Impact:", 0, 1)
+        self.set_fill_color(248, 250, 252) 
+        self.rect(self.get_x(), self.get_y(), 190, len(data_dict)*8 + 5, 'F')
+        self.ln(2)
+
+        for key, value in data_dict.items():
+            key_label = key.replace('_', ' ').title()
+            val_text = sanitize_text(str(value))
+            
+            self.set_font('Arial', 'B', 9)
+            self.set_text_color(*COLORS['text_main'])
+            self.cell(60, 8, "  " + key_label + ":", 0, 0) # Indent
+            
+            self.set_font('Arial', '', 9)
+            self.set_text_color(*COLORS['text_light'])
+            self.multi_cell(0, 8, val_text)
+        self.ln(2)
+
+    def draw_list_section(self, title, items, color=COLORS['section_comm'], bullet="•"):
+        """Draw a bulleted list section with icons."""
+        if not items: return
+        self.check_space(len(items) * 10 + 20)
+        self.ln(8)
+        self.draw_section_header(title, color)
         
         self.set_font('Arial', '', 9)
         self.set_text_color(*COLORS['text_main'])
+        for item in items:
+            self.set_text_color(*color)
+            self.cell(8, 7, bullet, 0, 0, 'R')
+            self.set_text_color(*COLORS['text_main'])
+            self.multi_cell(0, 7, sanitize_text(str(item)))
+
+    # --- MAIN SCENARIO DRAWING ---
+
+    def draw_coaching_report(self, data):
+        self.draw_scorecard(data.get('scorecard', []))
+        self.draw_key_value_grid("BEHAVIORAL SIGNALS", data.get('behavioral_signals', {}))
+        self.draw_list_section("STRENGTHS", data.get('strengths', []), COLORS['success'], "+")
+        self.draw_list_section("MISSED OPPORTUNITIES", data.get('missed_opportunities', []), COLORS['warning'], "!")
+        self.draw_key_value_grid("COACHING IMPACT", data.get('coaching_impact', {}), COLORS['purple'])
+        self.draw_list_section("ACTIONABLE TIPS", data.get('actionable_tips', []), COLORS['accent'], "->")
+
+    def draw_sales_report(self, data):
+        self.draw_scorecard(data.get('scorecard', []))
+        self.draw_key_value_grid("SIMULATION ANALYSIS", data.get('simulation_analysis', {}))
+        self.draw_list_section("WHAT WORKED", data.get('what_worked', []), COLORS['success'], "V")
+        self.draw_list_section("LIMITATIONS", data.get('what_limited_effectiveness', []), COLORS['danger'], "X")
+        self.draw_key_value_grid("REVENUE IMPACT", data.get('revenue_impact', {}), COLORS['danger'])
+        self.draw_list_section("RECOMMENDATIONS", data.get('sales_recommendations', []), COLORS['accent'])
+
+    def draw_learning_report(self, data):
+        self.draw_key_value_grid("CONTEXT", data.get('context_summary', {}))
+        self.draw_list_section("KEY INSIGHTS", data.get('key_insights', []), COLORS['purple'])
+        self.draw_list_section("REFLECTIVE QUESTIONS", data.get('reflective_questions', []), COLORS['accent'], "?")
         
-        y = self.get_y()
-        self.multi_cell(90, 5, sanitize_text(blueprint.get('micro_correction', 'None')))
-        self.set_xy(105, y)
-        self.multi_cell(90, 5, sanitize_text(blueprint.get('shadow_impact', 'None')))
-        self.ln(6)
+        # Behavioral Shifts
+        shifts = data.get('behavioral_shifts', [])
+        if shifts:
+            self.draw_section_header("BEHAVIORAL SHIFTS", COLORS['section_skills'])
+            for s in shifts:
+                self.set_font('Arial', '', 9)
+                self.cell(90, 6, sanitize_text(s.get('from','')), 0, 0)
+                self.cell(10, 6, "->", 0, 0)
+                self.set_font('Arial', 'B', 9)
+                self.multi_cell(0, 6, sanitize_text(s.get('to','')))
+            self.ln(5)
+
+        self.draw_list_section("PRACTICE PLAN", data.get('practice_plan', []), COLORS['success'])
         
-        # Homework
-        if 'homework_exercises' in blueprint:
-            self.set_font('Arial', 'B', 10)
-            self.cell(0, 8, "Actionable Homework:", 0, 1)
-            self.set_font('Arial', '', 9)
-            for ex in blueprint.get('homework_exercises', []):
-                self.cell(5, 5, "-", 0, 0)
-                self.multi_cell(0, 5, sanitize_text(ex))
+        if data.get('growth_outcome'):
+            self.ln(5)
+            self.set_font('Arial', 'I', 11)
+            self.set_text_color(*COLORS['primary'])
+            self.multi_cell(0, 8, f"Growth Vision: {sanitize_text(data['growth_outcome'])}", align='C')
+
+    def draw_custom_report(self, data):
+        self.draw_key_value_grid("INTERACTION QUALITY", data.get('interaction_quality', {}))
+        
+        # Core Skills
+        skills = data.get('core_skills', [])
+        if skills:
+            self.draw_section_header("CORE SKILLS", COLORS['section_skills'])
+            for s in skills:
+                self.set_font('Arial', 'B', 9)
+                self.cell(50, 6, sanitize_text(s.get('skill', '')), 0, 0)
+                self.cell(30, 6, sanitize_text(s.get('rating', '')), 0, 0)
+                self.set_font('Arial', '', 9)
+                self.multi_cell(0, 6, sanitize_text(s.get('feedback', '')))
+        
+        self.draw_list_section("STRENGTHS", data.get('strengths_observed', []), COLORS['success'])
+        self.draw_list_section("DEVELOPMENT AREAS", data.get('development_opportunities', []), COLORS['warning'])
+        
+        # Guidance
+        guidance = data.get('guidance', {})
+        if guidance:
+            self.draw_list_section("CONTINUE", guidance.get('continue', []), COLORS['success'])
+            self.draw_list_section("ADJUST", guidance.get('adjust', []), COLORS['warning'])
+            self.draw_list_section("TRY NEXT", guidance.get('try_next', []), COLORS['accent'])
 
 
 def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None):
@@ -1058,27 +1081,31 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     pdf.add_page()
     
     # Get scenario_type from data if available
-    scenario_type = data.get('scenario_type', scenario_type)
+    scenario_type = data.get('meta', {}).get('scenario_type', scenario_type)
     
-    # 1. Banner with summary
+    # 1. Banner
     meta = data.get('meta', {})
     pdf.draw_banner(meta, scenario_type=scenario_type)
     
-    # 2. Layer 1: The Pulse
-    pulse = data.get('layer_1_pulse', [])
-    if pulse:
-        pdf.draw_layer_1_pulse(pulse)
-        
-    # 3. Layer 2: The Narrative
-    narrative = data.get('layer_2_narrative', {})
-    if narrative:
-        pdf.draw_layer_2_narrative(narrative)
-        
-    # 4. Layer 3: The Blueprint
-    blueprint = data.get('layer_3_blueprint', {})
-    if blueprint:
-        pdf.draw_layer_3_blueprint(blueprint)
+    # 2. Body based on Scenario Type
+    stype = str(scenario_type).lower()
+    
+    try:
+        if 'coaching' in stype:
+            pdf.draw_coaching_report(data)
+        elif 'sales' in stype or 'negotiation' in stype:
+            pdf.draw_sales_report(data)
+        elif 'learning' in stype or 'reflection' in stype:
+            pdf.draw_learning_report(data)
+        else:
+            pdf.draw_custom_report(data)
+    except Exception as e:
+        print(f"Error drawing report body: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to generic dump if drawing fails
+        pdf.draw_key_value_grid("RAW DATA DUMP (Drawing Failed)", {k:str(v)[:100] for k,v in data.items() if k != 'meta'})
 
     
     pdf.output(filename)
-    print(f"✅ Unified report saved: {filename} (scenario: {scenario_type})")
+    print(f"[SUCCESS] Unified report saved: {filename} (scenario: {scenario_type})")

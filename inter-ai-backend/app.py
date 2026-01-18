@@ -380,11 +380,9 @@ Current turn: {turn_count + 1}
 # Endpoints
 # ---------------------------------------------------------
 
-# ---------------------------------------------------------
-# Audio Persistence Helpers
-# ---------------------------------------------------------
-AUDIO_DIR = os.path.join(BASE_DIR, "static", "audio")
-os.makedirs(AUDIO_DIR, exist_ok=True)
+# Audio Persistence Helpers Removed
+# AUDIO_DIR = ...
+
 
 @app.route("/api/health")
 def health_check():
@@ -400,9 +398,8 @@ def health_check():
         }
     })
 
-@app.route('/static/audio/<path:filename>')
-def serve_audio(filename):
-    return send_file(os.path.join(AUDIO_DIR, filename))
+# Audio serving route removed
+
 
 @app.route("/api/transcribe", methods=["POST"])
 def transcribe_audio():
@@ -484,46 +481,10 @@ def transcribe_audio():
 
 @app.route("/api/speak", methods=["POST"])
 def speak_text():
-    """Text-to-Speech using OpenAI/Azure."""
-    data = request.get_json() or {}
-    text = data.get("text")
-    session_id = data.get("session_id")
-    
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
-
-    try:
-        TTS_MODEL = os.getenv("TTS_DEPLOYMENT_NAME", "tts-1")
-        VOICE = "alloy"
-        
-        print(f"🔊 Generating speech for: {text[:50]}...")
-        
-        response = client.audio.speech.create(
-            model=TTS_MODEL,
-            voice=VOICE,
-            input=text
-        )
-        
-        # Save to file
-        filename = f"{session_id or 'demo'}_{uuid.uuid4().hex[:8]}_ai.mp3"
-        save_path = os.path.join(AUDIO_DIR, filename)
-        
-        response.stream_to_file(save_path)
-        audio_url = f"/static/audio/{filename}"
-        
-        # Update session transcript if session_id is provided
-        if session_id and session_id in SESSIONS:
-            sess = SESSIONS[session_id]
-            # Find the last assistant message that matches the text (heuristic)
-            # Or just append to the very last message if it's assistant
-            if sess["transcript"] and sess["transcript"][-1]["role"] == "assistant":
-                 sess["transcript"][-1]["audio_url"] = audio_url
-
-        return jsonify({"audio_url": audio_url})
-        
-    except Exception as e:
-        print(f"❌ TTS Error: {e}")
-        return jsonify({"error": str(e)}), 500
+    """Text-to-Speech using OpenAI/Azure. (Persistence Removed)"""
+    # This endpoint is currently unused by the frontend (which uses browser TTS).
+    # If needed, it should be updated to return base64 instead of saving to disk.
+    return jsonify({"error": "Audio persistence disabled"}), 410
 
 
 
@@ -613,15 +574,8 @@ def detect_session_mode(scenario: str, ai_role: str) -> str:
 
 @app.post("/session/start")
 def start_session():
-    # Clear previous audio files on new session start
-    try:
-        if os.path.exists(AUDIO_DIR):
-            for f in os.listdir(AUDIO_DIR):
-                file_path = os.path.join(AUDIO_DIR, f)
-                if os.path.isfile(file_path):
-                    os.unlink(file_path)
-    except Exception as e:
-        print(f"Error clearing audio dir: {e}")
+    # Audio cleanup logic removed
+
 
     data = request.get_json(force=True, silent=True) or {}
     role = data.get("role")
