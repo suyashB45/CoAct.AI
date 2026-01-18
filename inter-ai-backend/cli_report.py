@@ -256,6 +256,10 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
   2. **Skill Focus Areas**: 3 specific skills (e.g. "Questioning techniques").
   3. **Practice Suggestions**: Concrete actions (e.g. "2-3 second pause").
   4. **Coaching Questions**: (Optional) Reflective questions.
+- **IMPORTANT JSON MAPPING**:
+  - Map "Critical Insights" -> to JSON field `micro_correction`
+  - Map "Skill Focus Areas" -> to JSON field `shadow_impact`
+  - Map "Practice Suggestions" -> to JSON field `homework_exercises`
 - **IMPORTANT**: Return 'layer_1_pulse' as EMPTY LIST []. Do not invent scores.
 """
     elif scenario_type == "deescalation":
