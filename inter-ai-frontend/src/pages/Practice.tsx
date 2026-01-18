@@ -26,7 +26,7 @@ const DEFAULT_SCENARIOS = [
         color: "from-orange-600 to-red-500",
         scenarios: [
             {
-                title: "Scenario 1: Retail Coaching",
+                title: "Scenario 1: Managerial Coaching",
                 description: "A staff member's recent performance has dropped (sales, energy, engagement). The manager is initiating a coaching conversation, not a disciplinary one.",
                 ai_role: "Retail Sales Associate",
                 user_role: "Retail Store Manager",
@@ -37,7 +37,7 @@ const DEFAULT_SCENARIOS = [
                 scenario_type: "coaching"
             },
             {
-                title: "Scenario 2: Low-Price Negotiation",
+                title: "Scenario 2: Sales & Negotiation",
                 description: "Customer is interested in purchasing a high-value product but has concerns about price being too high, competitor offers, and is asking for discounts.",
                 ai_role: "Retail Customer",
                 user_role: "Salesperson",
@@ -48,7 +48,7 @@ const DEFAULT_SCENARIOS = [
                 scenario_type: "negotiation"
             },
             {
-                title: "Scenario 3: Learning Reflection",
+                title: "Scenario 3: Developmental Learning Plan",
                 description: "The user explains how they handled a recent customer interaction (or simulates a short one) to receive coaching guidance.",
                 ai_role: "Coach Alex",
                 user_role: "Retail Staff",

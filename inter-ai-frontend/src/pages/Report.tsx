@@ -3,93 +3,57 @@
 import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { Loader2, Download, AlertCircle, TrendingUp, Target, User, Bot, History, CheckCircle, Zap, MessageCircle } from "lucide-react"
+import { Loader2, Download, AlertCircle, TrendingUp, Target, User, Bot, History, Zap } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "@/lib/api"
 
 // --- INTERFACES FOR UNIFIED REPORT STRUCTURE (Matching PDF) ---
 
-interface TranscriptMessage {
-    role: "user" | "assistant"
-    content: string
-    audio_url?: string | null
+// --- UNIVERSAL MODULAR STRUCTURE INTERFACES ---
+
+interface PulseMetric {
+    metric: string
+    score: string | number // Can be 1-10 or "Beginner"/"Expert" level
+    insight: string
 }
 
-interface SkillScore {
-    dimension: string
-    score?: number
-    level?: string
-    interpretation: string
-    evidence?: string
-    improvement_tip?: string
+interface NarrativeLayer {
+    sentiment_curve?: string
+    critical_pivots?: {
+        green_light?: { turn?: string, event: string, quote?: string }
+        red_light?: { turn?: string, event: string, quote?: string }
+    }
+    think_aloud?: {
+        context: string
+        thought: string
+    }
 }
 
-interface TacticalObservation {
-    moment: string
-    analysis: string
-    impact?: string
-    replication?: string
-    alternative?: string
-    prevention?: string
-}
-
-interface ExecutiveSummary {
-    performance_overview: string
-    key_strengths: string[]
-    areas_for_growth: string[]
-    recommended_next_steps: string
-}
-
-interface PersonalizedRecommendations {
-    immediate_actions: string[]
-    focus_areas: string[]
-    reflection_prompts: string[]
-    practice_suggestions: { action: string, frequency: string, success_indicator?: string }[]
-}
-
-interface ConversationAnalytics {
-    total_exchanges?: number
-    user_talk_time_percentage?: number
-    question_to_statement_ratio?: string
-    emotional_tone_progression?: string
-    framework_adherence?: string
+interface BlueprintLayer {
+    micro_correction?: string
+    shadow_impact?: string
+    homework_exercises?: string[]
 }
 
 interface ReportData {
     meta: {
+        scenario_id: string
+        outcome_status: string // Success, Partial, Failure
+        overall_grade: string // A-F or 1-100
         summary: string
-        emotional_trajectory?: string
-        session_quality?: string
-        key_themes?: string[]
         scenario_type?: string
     }
-    scenario_type?: "coaching" | "negotiation" | "reflection" | "custom"
-    mode?: string
+    scenario_type?: string // legacy fallback
 
-    // Unified structure (matching PDF)
-    executive_summary?: ExecutiveSummary
-    conversation_analytics?: ConversationAnalytics
-    skill_analysis?: SkillScore[]
-    skill_dimension_scores?: SkillScore[]
-    tactical_observations?: {
-        success?: TacticalObservation
-        risk?: TacticalObservation
-    }
-    observed_strengths?: { title: string, observation: string, business_impact?: string }[]
-    growth_opportunities?: { title: string, observation: string, suggestion?: string, practice_method?: string }[]
-    personalized_recommendations?: PersonalizedRecommendations
-    learning_outcome?: string
+    // The 3 Universal Layers
+    layer_1_pulse?: PulseMetric[]
+    layer_2_narrative?: NarrativeLayer
+    layer_3_blueprint?: BlueprintLayer
 
-    // Legacy fields
-    readiness_indicator?: { label: string, score: number, next_level_requirements?: string, estimated_timeline?: string }
-    manager_recommendations?: { immediate_action?: string, next_simulation?: string, development_focus?: string }
-    personalized_learning_path?: { skill: string, priority: string, timeline: string }[]
-
-    transcript?: TranscriptMessage[]
-    scenario?: string
+    // Legacy / Optional fields
+    transcript?: { role: "user" | "assistant", content: string }[]
 }
 
 export default function Report() {
@@ -139,14 +103,8 @@ export default function Report() {
     if (loading) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-6 font-sans">
-                <div className="relative">
-                    <div className="absolute inset-0 rounded-full bg-blue-500/30 animate-ping" />
-                    <Loader2 className="h-16 w-16 animate-spin text-blue-400 relative z-10" />
-                </div>
-                <div className="text-center">
-                    <p className="text-white font-bold text-2xl mb-2">Preparing Your Insights</p>
-                    <p className="text-slate-400 animate-pulse">Crafting your personalized coaching reflection...</p>
-                </div>
+                <Loader2 className="h-16 w-16 animate-spin text-blue-400" />
+                <p className="text-slate-400 animate-pulse">Generating Universal Report...</p>
             </div>
         )
     }
@@ -154,549 +112,214 @@ export default function Report() {
     if (!data || !data.meta) {
         return (
             <div className="min-h-screen bg-slate-950 p-12 flex flex-col items-center justify-center font-sans">
-                <div className="w-24 h-24 bg-amber-500/10 rounded-full flex items-center justify-center mb-8 border border-amber-500/20">
-                    <AlertCircle className="h-12 w-12 text-amber-500" />
-                </div>
+                <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
                 <h2 className="text-3xl font-bold text-white mb-3">Report Unavailable</h2>
-                <p className="text-slate-400 mb-8 text-center max-w-md text-lg">We couldn't load the analysis data.</p>
-                <button onClick={() => navigate("/")} className="btn-ultra-modern px-8 py-3">Go Home</button>
+                <button onClick={() => navigate("/")} className="px-8 py-3 bg-slate-800 rounded-lg text-white hover:bg-slate-700">Go Home</button>
             </div>
         )
     }
 
-    // Determine scenario type and styling
-    const scenarioType = data.scenario_type || data.meta?.scenario_type || 'custom'
-    const skills = data.skill_analysis || data.skill_dimension_scores || []
-    const hasScores = skills.some(s => s.score !== undefined)
+    const pulse = data.layer_1_pulse || []
+    const narrative = data.layer_2_narrative || {}
+    const blueprint = data.layer_3_blueprint || {}
 
-    const scenarioConfig: Record<string, { label: string, color: string, borderColor: string, bgColor: string, textColor: string, icon: any }> = {
-        'coaching': { label: 'COACHING & PERFORMANCE', color: 'text-blue-400', borderColor: 'border-l-blue-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-300', icon: User },
-        'negotiation': { label: 'SALES & NEGOTIATION', color: 'text-emerald-400', borderColor: 'border-l-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-300', icon: TrendingUp },
-        'reflection': { label: 'LEARNING REFLECTION', color: 'text-purple-400', borderColor: 'border-l-purple-500', bgColor: 'bg-purple-500/10', textColor: 'text-purple-300', icon: Bot },
-        'custom': { label: 'CORPORATE SCENARIO', color: 'text-amber-400', borderColor: 'border-l-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-300', icon: Zap },
-        'leadership': { label: 'LEADERSHIP & STRATEGY', color: 'text-indigo-400', borderColor: 'border-l-indigo-500', bgColor: 'bg-indigo-500/10', textColor: 'text-indigo-300', icon: Target },
-        'customer_service': { label: 'CUSTOMER SERVICE', color: 'text-red-400', borderColor: 'border-l-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-300', icon: MessageCircle }
+    // Helper for status color
+    const getStatusColor = (status: string) => {
+        const s = status?.toLowerCase() || ''
+        if (s.includes('success') || s.includes('closed') || s.includes('motivated')) return 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10'
+        if (s.includes('failure') || s.includes('unresolved')) return 'text-rose-400 border-rose-500/50 bg-rose-500/10'
+        return 'text-amber-400 border-amber-500/50 bg-amber-500/10' // Partial
     }
-
-    const config = scenarioConfig[scenarioType] || scenarioConfig['custom']
-
-    const SCENARIO_TITLES: Record<string, any> = {
-        'coaching': {
-            exec_summary: "PERFORMANCE IN BRIEF",
-            skills: "COACHING COMPETENCIES",
-            tactical: "COACHING MOMENTS",
-            strengths: "EFFECTIVE BEHAVIORS",
-            growth: "DEVELOPMENT OPPORTUNITIES",
-            recs: "DEVELOPMENT PLAN",
-            analytics: "CONVERSATION METRICS"
-        },
-        'negotiation': {
-            exec_summary: "DEAL OVERVIEW",
-            skills: "NEGOTIATION SKILLS",
-            tactical: "TACTICAL MOVES & COUNTERS",
-            strengths: "WINNING TACTICS",
-            growth: "MISSED OPPORTUNITIES",
-            recs: "STRATEGIC ADJUSTMENTS",
-            analytics: "NEGOTIATION DYNAMICS"
-        },
-        'reflection': {
-            exec_summary: "REFLECTION SUMMARY",
-            skills: "LEARNING ANALYSIS",
-            tactical: "KEY INSIGHTS",
-            strengths: "SELF-AWARENESS HIGHLIGHTS",
-            growth: "AREAS FOR DEEPER REFLECTION",
-            recs: "JOURNALING & PRACTICE",
-            analytics: "INTERACTION FLOW"
-        },
-        'custom': {
-            exec_summary: "EXECUTIVE BRIEF",
-            skills: "COMPETENCY MATRIX",
-            tactical: "KEY STAKEHOLDER INTERACTIONS",
-            strengths: "STRATEGIC ASSETS",
-            growth: "PERFORMANCE GAPS",
-            recs: "EXECUTIVE ACTION PLAN",
-            analytics: "ENGAGEMENT METRICS"
-        },
-        'leadership': {
-            exec_summary: "LEADERSHIP IMPACT BRIEF",
-            skills: "LEADERSHIP COMPETENCIES",
-            tactical: "STRATEGIC MOMENTS",
-            strengths: "VISIONARY TRAITS",
-            growth: "INFLUENCE GAPS",
-            recs: "LEADERSHIP DEVELOPMENT PLAN",
-            analytics: "PRESENCE METRICS"
-        },
-        'customer_service': {
-            exec_summary: "SERVICE RESOLUTION REPORT",
-            skills: "CLIENT RELATIONS SKILLS",
-            tactical: "SERVICE RECOVERY MOMENTS",
-            strengths: "EMPATHY & PATIENCE",
-            growth: "RESOLUTION GAPS",
-            recs: "SERVICE EXCELLENCE PLAN",
-            analytics: "CUSTOMER SENTIMENT"
-        }
-    }
-
-    const titles = SCENARIO_TITLES[scenarioType] || SCENARIO_TITLES['custom']
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-purple-500/30">
             <Navigation />
+            <main className="container mx-auto px-4 sm:px-6 py-24 sm:py-32 space-y-8">
 
-            {/* Background */}
-            <div className="fixed inset-0 pointer-events-none -z-10">
-                <div className={`absolute top-[-20%] left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] ${config.bgColor}`} />
-            </div>
-
-            <main className="container mx-auto px-4 sm:px-6 py-24 sm:py-32 space-y-6">
-
-                {/* Header with Download */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold text-white">Skill Development Report</h1>
-                        <p className="text-slate-400 text-sm mt-1">Session Analysis & Recommendations</p>
+                {/* HEADER & SUMMARY */}
+                <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-3xl font-bold text-white tracking-tight">{(data.meta?.scenario_id || "REPORT").toUpperCase()}</h1>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${getStatusColor(data.meta?.outcome_status)}`}>
+                                {data.meta?.outcome_status || "Unknown"}
+                            </span>
+                        </div>
+                        <p className="text-slate-400 max-w-2xl text-lg">{data.meta?.summary || "No summary available."}</p>
                     </div>
-                    <button onClick={handleDownload} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold transition-colors border border-white/10">
-                        <Download className="w-4 h-4" /> Export PDF
-                    </button>
+                    <div className="text-right flex flex-col items-end gap-2">
+                        <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                            {data.meta?.scenario_type === "reflection" ? "N/A" : (data.meta?.overall_grade || "N/A")}
+                        </div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                            {(() => {
+                                const st = (data.meta?.scenario_type || data.scenario_type || "").toLowerCase();
+                                if (st.includes("coaching")) return "Coaching Efficacy";
+                                if (st.includes("negotiation")) return "Negotiation Power";
+                                if (st.includes("reflection")) return "Learning Insights";
+                                return "Goal Attainment";
+                            })()}
+                        </div>
+                        <button onClick={handleDownload} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors mt-2">
+                            <Download className="w-4 h-4" /> Export PDF
+                        </button>
+                    </div>
                 </div>
 
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 1: BANNER (Matching PDF draw_banner)
-                    - Scenario type badge
-                    - Summary text
-                    - Emotional arc, Session quality, Key themes
-                ══════════════════════════════════════════════════════════════════ */}
+                {/* LAYER 1: THE PULSE (Metrics) - HIDE IF EMPTY (S3) */}
+                {pulse.length > 0 && (
+                    <motion.section
+                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                        className="rounded-2xl bg-slate-900 border border-white/10 overflow-hidden"
+                    >
+                        <div className="bg-slate-800/50 px-6 py-4 border-b border-white/5 flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/20 rounded-lg"><TrendingUp className="w-5 h-5 text-blue-400" /></div>
+                            <h2 className="text-lg font-bold text-white tracking-wide">LAYER 1: THE PULSE</h2>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-white/5">
+                            {pulse.map((metric, i) => (
+                                <div key={i} className="p-6 hover:bg-white/5 transition-colors group">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{metric.metric}</h3>
+                                    <div className="flex items-baseline gap-2 mb-3">
+                                        <span className={`text-3xl font-bold ${String(metric.score).includes('Expert') || Number(metric.score) >= 8 ? 'text-emerald-400' :
+                                            Number(metric.score) <= 4 ? 'text-rose-400' : 'text-amber-400'
+                                            }`}>
+                                            {metric.score}
+                                        </span>
+                                        {typeof metric.score === 'number' && <span className="text-sm text-slate-600 font-medium">/ 10</span>}
+                                    </div>
+                                    <p className="text-sm text-slate-300 leading-relaxed opacity-80 group-hover:opacity-100">{metric.insight}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.section>
+                )}
+
+                {/* LAYER 2: THE NARRATIVE (Insights) */}
                 <motion.section
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`rounded-2xl bg-slate-900/80 border border-white/10 p-5 sm:p-6 border-l-4 ${config.borderColor}`}
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                    className="rounded-2xl bg-slate-900 border border-white/10 overflow-hidden"
                 >
-                    {/* Scenario Type Badge */}
-                    <div className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${config.color} mb-3`}>
-                        <config.icon className="h-4 w-4" />
-                        {config.label}
+                    <div className="bg-slate-800/50 px-6 py-4 border-b border-white/5 flex items-center gap-3">
+                        <div className="p-2 bg-purple-500/20 rounded-lg"><User className="w-5 h-5 text-purple-400" /></div>
+                        <h2 className="text-lg font-bold text-white tracking-wide">
+                            {data.meta?.scenario_type === 'reflection' ? "LAYER 2: REFLECTIVE INSIGHTS" : "LAYER 2: THE NARRATIVE"}
+                        </h2>
                     </div>
+                    <div className="p-6 space-y-8">
+                        {/* Sentiment Curve - Rename for S3? Keep unique. */}
+                        <div className="relative pl-4 border-l-2 border-slate-800">
+                            <h3 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-2">
+                                {data.meta?.scenario_type === 'reflection' ? "REFLECTION TIMELINE" : "AI SENTIMENT CURVE"}
+                            </h3>
+                            <p className="text-lg text-slate-200">{narrative.sentiment_curve || "Not available"}</p>
+                        </div>
 
-                    {/* Summary */}
-                    <p className="text-base sm:text-lg text-slate-300 leading-relaxed mb-4">{data.meta.summary}</p>
+                        <div className="grid md:grid-cols-2 gap-6">
+                            {/* Critical Pivots / Key Moments */}
+                            <div className="space-y-4">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                                    {data.meta?.scenario_type === 'reflection' ? "KEY LEARNING MOMENTS" : "CRITICAL PIVOTS"}
+                                </h3>
+                                {narrative.critical_pivots?.green_light && (
+                                    <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                            <span className="text-emerald-400 font-bold text-sm uppercase">
+                                                {data.meta?.scenario_type === 'reflection' ? "POSITIVE PATTERN" : "GREEN LIGHT MOMENT"}
+                                            </span>
+                                        </div>
+                                        <p className="text-slate-300 text-sm mb-2">{narrative.critical_pivots.green_light.event}</p>
+                                        {narrative.critical_pivots.green_light.quote && (
+                                            <p className="text-xs text-slate-500 italic">"{narrative.critical_pivots.green_light.quote}"</p>
+                                        )}
+                                    </div>
+                                )}
+                                {narrative.critical_pivots?.red_light && (
+                                    <div className="bg-rose-950/20 border border-rose-500/20 rounded-xl p-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+                                            <span className="text-rose-400 font-bold text-sm uppercase">
+                                                {data.meta?.scenario_type === 'reflection' ? "MISSED OPPORTUNITY" : "RED LIGHT MOMENT"}
+                                            </span>
+                                        </div>
+                                        <p className="text-slate-300 text-sm mb-2">{narrative.critical_pivots.red_light.event}</p>
+                                        {narrative.critical_pivots.red_light.quote && (
+                                            <p className="text-xs text-slate-500 italic">"{narrative.critical_pivots.red_light.quote}"</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
 
-                    {/* Meta Info Row */}
-                    <div className="space-y-2 text-sm">
-                        {data.meta.emotional_trajectory && (
-                            <div className="flex items-start gap-2">
-                                <span className="text-indigo-400 font-bold">›</span>
-                                <span className="text-slate-500 uppercase text-xs font-bold shrink-0">EMOTIONAL ARC:</span>
-                                <span className="text-slate-300">{data.meta.emotional_trajectory}</span>
+                            {/* Think Aloud Reveal / Coach's Observation */}
+                            <div className="bg-indigo-950/20 border border-indigo-500/20 rounded-xl p-5 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10"><Bot className="w-24 h-24 text-indigo-500" /></div>
+                                <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Zap className="w-4 h-4" />
+                                    {data.meta?.scenario_type === 'reflection' ? "COACH'S OBSERVATION" : "THE \"THINK-ALOUD\" REVEAL"}
+                                </h3>
+                                <div className="relative z-10 space-y-4">
+                                    <div>
+                                        <span className="text-xs text-slate-500 uppercase block mb-1">When you said...</span>
+                                        <p className="text-sm text-slate-300 italic">"{narrative.think_aloud?.context || '...'}"</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-slate-500 uppercase block mb-1">
+                                            {data.meta?.scenario_type === 'reflection' ? "I observed..." : "I was actually thinking..."}
+                                        </span>
+                                        <p className="text-base text-white font-medium">"{narrative.think_aloud?.thought || '...'}"</p>
+                                    </div>
+                                </div>
                             </div>
-                        )}
-                        {data.meta.session_quality && (
-                            <div className="flex items-start gap-2">
-                                <span className="text-emerald-400 font-bold">›</span>
-                                <span className="text-slate-500 uppercase text-xs font-bold shrink-0">SESSION QUALITY:</span>
-                                <span className="text-slate-300">{data.meta.session_quality}</span>
-                            </div>
-                        )}
-                        {data.meta.key_themes && data.meta.key_themes.length > 0 && (
-                            <div className="flex items-start gap-2">
-                                <span className="text-pink-400 font-bold">›</span>
-                                <span className="text-slate-500 uppercase text-xs font-bold shrink-0">KEY THEMES:</span>
-                                <span className="text-slate-400 italic">{data.meta.key_themes.join(' | ')}</span>
-                            </div>
-                        )}
+                        </div>
                     </div>
                 </motion.section>
 
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 2: EXECUTIVE SUMMARY (Matching PDF draw_executive_summary)
-                    - Performance overview
-                    - Two-column: Key Strengths | Areas for Growth
-                    - Recommended next steps
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.executive_summary && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.05 }}
-                        className="rounded-2xl bg-slate-900/80 border border-white/10 overflow-hidden"
-                    >
-                        {/* Header Bar */}
-                        <div className="bg-slate-800 px-5 py-3">
-                            <h2 className="text-white font-bold text-sm uppercase tracking-wider">{titles.exec_summary}</h2>
-                        </div>
-
-                        <div className="p-5 sm:p-6">
-                            {/* Performance Overview */}
-                            <p className="text-slate-300 leading-relaxed mb-5">{data.executive_summary.performance_overview}</p>
-
-                            {/* Two Column Grid */}
-                            <div className="grid md:grid-cols-2 gap-4 mb-4">
-                                {/* Key Strengths (Green background like PDF) */}
-                                <div className="bg-emerald-950/30 border border-emerald-900/50 rounded-xl p-4">
-                                    <h3 className="text-emerald-400 font-bold text-xs uppercase tracking-wider mb-3">KEY STRENGTHS</h3>
-                                    <ul className="space-y-2">
-                                        {data.executive_summary.key_strengths?.map((strength, i) => (
-                                            <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                                                <span className="text-emerald-400 mt-0.5">+</span>
-                                                {strength}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-
-                                {/* Areas for Growth (Yellow/Amber background like PDF) */}
-                                <div className="bg-amber-950/30 border border-amber-900/50 rounded-xl p-4">
-                                    <h3 className="text-amber-400 font-bold text-xs uppercase tracking-wider mb-3">AREAS FOR GROWTH</h3>
-                                    <ul className="space-y-2">
-                                        {data.executive_summary.areas_for_growth?.map((area, i) => (
-                                            <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-                                                <span className="text-amber-400 mt-0.5">-</span>
-                                                {area}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </div>
-
-                            {/* Recommended Next Steps */}
-                            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-blue-400 font-bold text-xs uppercase tracking-wider">NEXT STEPS:</span>
-                                </div>
-                                <p className="text-slate-300 text-sm">{data.executive_summary.recommended_next_steps}</p>
-                            </div>
-                        </div>
-                    </motion.section>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 3: CONVERSATION ANALYTICS (Matching PDF draw_conversation_analytics)
-                    - Total Exchanges, Talk Time Balance, Q/S Ratio, Emotional Progression
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.conversation_analytics && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="rounded-2xl bg-slate-900/80 border border-white/10 overflow-hidden"
-                    >
-                        <div className="bg-slate-800 px-5 py-3 flex items-center gap-2">
-                            <MessageCircle className="w-4 h-4 text-cyan-400" />
-                            <h2 className="text-white font-bold text-sm uppercase tracking-wider">{titles.analytics}</h2>
-                        </div>
-
-                        <div className="p-5 sm:p-6">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {data.conversation_analytics.total_exchanges !== undefined && (
-                                    <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                                        <div className="text-2xl font-bold text-cyan-400">{data.conversation_analytics.total_exchanges}</div>
-                                        <div className="text-xs text-slate-500 uppercase mt-1">Total Exchanges</div>
-                                    </div>
-                                )}
-                                {data.conversation_analytics.user_talk_time_percentage !== undefined && (
-                                    <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                                        <div className="text-2xl font-bold text-purple-400">{data.conversation_analytics.user_talk_time_percentage}%</div>
-                                        <div className="text-xs text-slate-500 uppercase mt-1">Your Talk Time</div>
-                                    </div>
-                                )}
-                                {data.conversation_analytics.question_to_statement_ratio && (
-                                    <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                                        <div className="text-2xl font-bold text-amber-400">{data.conversation_analytics.question_to_statement_ratio}</div>
-                                        <div className="text-xs text-slate-500 uppercase mt-1">Q/S Ratio</div>
-                                    </div>
-                                )}
-                                {data.conversation_analytics.emotional_tone_progression && (
-                                    <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                                        <div className="text-lg font-bold text-emerald-400 truncate">{data.conversation_analytics.emotional_tone_progression}</div>
-                                        <div className="text-xs text-slate-500 uppercase mt-1">Emotional Progress</div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </motion.section>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 4: SKILL DIMENSION ANALYSIS (Matching PDF draw_assessment_table + draw_score_chart)
-                    - Bar chart visualization
-                    - Table with Dimension, Score, Interpretation, Improvement Tip
-                ══════════════════════════════════════════════════════════════════ */}
-                {skills.length > 0 && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="rounded-2xl bg-slate-900/80 border border-white/10 overflow-hidden"
-                    >
-                        <div className="bg-slate-800 px-5 py-3 flex items-center gap-2">
-                            <Target className="w-4 h-4 text-rose-400" />
-                            <h2 className="text-white font-bold text-sm uppercase tracking-wider">{titles.skills}</h2>
-                        </div>
-
-                        <div className="p-5 sm:p-6">
-                            {/* Chart Visualization (if scores exist) */}
-                            {hasScores && (
-                                <div className="mb-6 h-48 sm:h-56 w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart
-                                            data={skills}
-                                            layout="vertical"
-                                            margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
-                                            <XAxis type="number" domain={[0, 10]} tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                            <YAxis
-                                                dataKey="dimension"
-                                                type="category"
-                                                width={100}
-                                                tick={{ fill: '#94a3b8', fontSize: 10 }}
-                                                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                                                tickLine={false}
-                                            />
-                                            <Tooltip
-                                                cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                                                contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                                                itemStyle={{ color: '#fff' }}
-                                                formatter={(value: any) => [`${value}/10`, 'Score']}
-                                            />
-                                            <ReferenceLine x={7} stroke="rgba(100, 116, 139, 0.5)" strokeDasharray="3 3" label={{ value: 'Target: 7', fill: '#64748b', fontSize: 10, position: 'top' }} />
-                                            <Bar dataKey="score" radius={[0, 4, 4, 0]} barSize={14}>
-                                                {skills.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={
-                                                        (entry.score || 0) >= 8 ? '#4ade80' :
-                                                            (entry.score || 0) >= 6 ? '#fbbf24' :
-                                                                '#f43f5e'
-                                                    } />
-                                                ))}
-                                            </Bar>
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            )}
-
-                            {/* Table/Cards - matches PDF table structure */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="bg-slate-800/50 text-left">
-                                            <th className="px-4 py-3 font-bold text-slate-300 text-xs uppercase">Dimension</th>
-                                            {hasScores && <th className="px-4 py-3 font-bold text-slate-300 text-xs uppercase text-center">Score</th>}
-                                            <th className="px-4 py-3 font-bold text-slate-300 text-xs uppercase">Interpretation</th>
-                                            <th className="px-4 py-3 font-bold text-slate-300 text-xs uppercase">Improvement Tip</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {skills.map((skill, i) => (
-                                            <tr key={i} className="border-t border-white/5">
-                                                <td className="px-4 py-3 font-semibold text-white">{skill.dimension}</td>
-                                                {hasScores && (
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`font-bold ${(skill.score || 0) >= 8 ? 'text-emerald-400' :
-                                                            (skill.score || 0) >= 6 ? 'text-amber-400' : 'text-rose-400'
-                                                            }`}>
-                                                            {skill.score}/10
-                                                        </span>
-                                                    </td>
-                                                )}
-                                                <td className="px-4 py-3 text-slate-400 text-xs">{skill.interpretation}</td>
-                                                <td className="px-4 py-3 text-blue-400 text-xs">{skill.improvement_tip}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </motion.section>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 5: TACTICAL OBSERVATIONS (Matching PDF draw_tactical_observations)
-                    - Success Moment (green) | Improvement Area (red) side by side
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.tactical_observations && (data.tactical_observations.success || data.tactical_observations.risk) && (
-                    <div className="space-y-4">
-                        {/* Section Header */}
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="h-4 w-1 bg-indigo-500 rounded-full" />
-                            <h2 className="text-indigo-400 font-bold text-sm uppercase tracking-wider">{titles.tactical}</h2>
-                        </div>
-                        <motion.section
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            className="grid md:grid-cols-2 gap-4"
-                        >
-                            {/* Success Moment */}
-                            {data.tactical_observations.success && (
-                                <div className="rounded-2xl bg-emerald-950/30 border border-emerald-900/50 p-5">
-                                    <h3 className="text-emerald-400 font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <Zap className="w-4 h-4" /> SUCCESS MOMENT
-                                    </h3>
-                                    <blockquote className="text-slate-300 italic border-l-2 border-emerald-500 pl-3 mb-3 text-sm">
-                                        "{data.tactical_observations.success.moment}"
-                                    </blockquote>
-                                    {data.tactical_observations.success.impact && (
-                                        <p className="text-xs text-slate-500 mb-1">
-                                            <span className="text-slate-400">Impact:</span> {data.tactical_observations.success.impact}
-                                        </p>
-                                    )}
-                                    {data.tactical_observations.success.replication && (
-                                        <p className="text-xs text-slate-500">
-                                            <span className="text-slate-400">Replicate by:</span> {data.tactical_observations.success.replication}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Risk/Improvement Moment */}
-                            {data.tactical_observations.risk && (
-                                <div className="rounded-2xl bg-rose-950/30 border border-rose-900/50 p-5">
-                                    <h3 className="text-rose-400 font-bold text-xs uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4" /> IMPROVEMENT AREA
-                                    </h3>
-                                    <blockquote className="text-slate-300 italic border-l-2 border-rose-500 pl-3 mb-3 text-sm">
-                                        "{data.tactical_observations.risk.moment}"
-                                    </blockquote>
-                                    {data.tactical_observations.risk.alternative && (
-                                        <p className="text-xs text-slate-500 mb-1">
-                                            <span className="text-slate-400">Try instead:</span> {data.tactical_observations.risk.alternative}
-                                        </p>
-                                    )}
-                                    {data.tactical_observations.risk.prevention && (
-                                        <p className="text-xs text-slate-500">
-                                            <span className="text-slate-400">Prevent by:</span> {data.tactical_observations.risk.prevention}
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        </motion.section>
+                {/* LAYER 3: THE BLUEPRINT (Development) */}
+                <motion.section
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                    className="rounded-2xl bg-slate-900 border border-white/10 overflow-hidden"
+                >
+                    <div className="bg-slate-800/50 px-6 py-4 border-b border-white/5 flex items-center gap-3">
+                        <div className="p-2 bg-amber-500/20 rounded-lg"><Target className="w-5 h-5 text-amber-400" /></div>
+                        <h2 className="text-lg font-bold text-white tracking-wide">
+                            {data.meta?.scenario_type === 'reflection' ? "LAYER 3: PERSONAL LEARNING PLAN" : "LAYER 3: THE BLUEPRINT"}
+                        </h2>
                     </div>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 6: STRENGTHS IDENTIFIED (Matching PDF draw_observed_strengths)
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.observed_strengths && data.observed_strengths.length > 0 && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="rounded-2xl bg-slate-900/80 border border-white/10 overflow-hidden"
-                    >
-                        <div className="bg-emerald-900/30 px-5 py-3 flex items-center gap-2 border-b border-emerald-800/30">
-                            <CheckCircle className="w-4 h-4 text-emerald-400" />
-                            <h2 className="text-emerald-400 font-bold text-sm uppercase tracking-wider">{titles.strengths}</h2>
+                    <div className="p-6 grid md:grid-cols-3 gap-6">
+                        {/* Micro Correction / Key Insights (S3) */}
+                        <div className="bg-slate-800/50 rounded-xl p-5 border border-white/5">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                                {data.meta?.scenario_type === 'reflection' ? "KEY COACHING QUESTION" : "MICRO-CORRECTION"}
+                            </h3>
+                            <p className="text-slate-300 text-sm leading-relaxed">{blueprint.micro_correction || "No specific correction."}</p>
                         </div>
 
-                        <div className="p-5 space-y-4">
-                            {data.observed_strengths.map((str, i) => (
-                                <div key={i}>
-                                    <h4 className="text-emerald-300 font-semibold mb-1 flex items-center gap-2">
-                                        <span className="text-emerald-400">›</span> {str.title}
-                                    </h4>
-                                    <p className="text-sm text-slate-400 ml-4">{str.observation}</p>
-                                    {str.business_impact && (
-                                        <p className="text-xs text-slate-500 ml-4 mt-1 italic">Business Impact: {str.business_impact}</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </motion.section>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 7: IMPROVEMENT AREAS (Matching PDF draw_coaching_opportunities)
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.growth_opportunities && data.growth_opportunities.length > 0 && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="rounded-2xl bg-slate-900/80 border border-white/10 overflow-hidden"
-                    >
-                        <div className="bg-amber-900/30 px-5 py-3 flex items-center gap-2 border-b border-amber-800/30">
-                            <TrendingUp className="w-4 h-4 text-amber-400" />
-                            <h2 className="text-amber-400 font-bold text-sm uppercase tracking-wider">{titles.growth}</h2>
+                        {/* Shadow Impact / Skill Focus (S3) */}
+                        <div className="bg-slate-800/50 rounded-xl p-5 border border-white/5">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                                {data.meta?.scenario_type === 'reflection' ? "SKILL FOCUS AREA" : "THE SHADOW IMPACT"}
+                            </h3>
+                            <p className="text-slate-300 text-sm leading-relaxed">{blueprint.shadow_impact || "No long-term impact analysis."}</p>
                         </div>
 
-                        <div className="p-5 space-y-4">
-                            {data.growth_opportunities.map((opp, i) => (
-                                <div key={i}>
-                                    <h4 className="text-amber-300 font-semibold mb-1 flex items-center gap-2">
-                                        <span className="text-amber-400">→</span> {opp.title}
-                                    </h4>
-                                    <p className="text-sm text-slate-400 ml-4">{opp.observation}</p>
-                                    {opp.suggestion && (
-                                        <p className="text-xs text-amber-400/80 ml-4 mt-2 bg-amber-950/30 p-2 rounded">
-                                            💡 {opp.suggestion}
-                                        </p>
-                                    )}
-                                </div>
-                            ))}
+                        {/* Actionable Homework / Practice Suggestions (S3) */}
+                        <div className="bg-slate-800/50 rounded-xl p-5 border border-white/5">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                                {data.meta?.scenario_type === 'reflection' ? "PRACTICE SUGGESTIONS" : "ACTIONABLE HOMEWORK"}
+                            </h3>
+                            <ul className="space-y-3">
+                                {blueprint.homework_exercises?.map((ex, i) => (
+                                    <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                                        <span className="text-amber-400 mt-0.5">▪</span>
+                                        {ex}
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                    </motion.section>
-                )}
+                    </div>
+                </motion.section>
 
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 8: PERSONALIZED RECOMMENDATIONS (Matching PDF draw_personalized_recommendations)
-                    - Dark background block with Immediate Actions, Focus Areas, Reflection Prompts
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.personalized_recommendations && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="rounded-2xl bg-slate-800 border border-white/10 p-5 sm:p-6"
-                    >
-                        <h2 className="text-white font-bold text-sm uppercase tracking-wider mb-5">{titles.recs}</h2>
-
-                        <div className="space-y-4">
-                            {/* Immediate Actions */}
-                            {data.personalized_recommendations.immediate_actions?.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                    <span className="text-blue-300 font-bold text-xs uppercase shrink-0">IMMEDIATE ACTIONS:</span>
-                                    <span className="text-white text-sm">{data.personalized_recommendations.immediate_actions.join(', ')}</span>
-                                </div>
-                            )}
-
-                            {/* Focus Areas */}
-                            {data.personalized_recommendations.focus_areas?.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                    <span className="text-blue-300 font-bold text-xs uppercase shrink-0">FOCUS AREAS:</span>
-                                    <span className="text-white text-sm">{data.personalized_recommendations.focus_areas.join(', ')}</span>
-                                </div>
-                            )}
-
-                            {/* Reflection Prompts */}
-                            {data.personalized_recommendations.reflection_prompts?.length > 0 && (
-                                <div className="mt-4 pt-4 border-t border-white/10">
-                                    <div className="space-y-2">
-                                        {data.personalized_recommendations.reflection_prompts.slice(0, 2).map((prompt, i) => (
-                                            <p key={i} className="text-slate-400 text-sm italic">
-                                                <span className="text-slate-500 not-italic mr-1">?</span> {prompt}
-                                            </p>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </motion.section>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════════
-                    SECTION 9: LEARNING OUTCOME (Matching PDF draw_learning_outcome)
-                ══════════════════════════════════════════════════════════════════ */}
-                {data.learning_outcome && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="rounded-2xl bg-emerald-950/30 border border-emerald-900/50 p-5"
-                    >
-                        <h3 className="text-emerald-400 font-bold text-xs uppercase tracking-wider mb-3">Learning Outcome</h3>
-                        <p className="text-emerald-100 italic text-lg leading-relaxed">"{data.learning_outcome}"</p>
-                    </motion.section>
-                )}
 
                 {/* ══════════════════════════════════════════════════════════════════
                     SECTION 10: SESSION TRANSCRIPT

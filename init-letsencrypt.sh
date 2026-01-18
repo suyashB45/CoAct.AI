@@ -4,7 +4,7 @@
 # Run this script on your Azure VM to obtain SSL certificates
 
 domains=(coactai.centralindia.cloudapp.azure.com)
-email="your-email@example.com"  # CHANGE THIS to your email
+email="coactai@outlook.com"  # CHANGE THIS to your email
 staging=0  # Set to 1 for testing (avoids rate limits)
 
 data_path="./certbot"
