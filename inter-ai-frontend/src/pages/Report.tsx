@@ -290,7 +290,7 @@ export default function Report() {
                         {/* Micro Correction / Key Insights (S3) */}
                         <div className="bg-slate-800/50 rounded-xl p-5 border border-white/5">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
-                                {data.meta?.scenario_type === 'reflection' ? "KEY COACHING QUESTION" : "MICRO-CORRECTION"}
+                                {data.meta?.scenario_type === 'reflection' ? "CRITICAL INSIGHTS" : "MICRO-CORRECTION"}
                             </h3>
                             <p className="text-slate-300 text-sm leading-relaxed">{blueprint.micro_correction || "No specific correction."}</p>
                         </div>

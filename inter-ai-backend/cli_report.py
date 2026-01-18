@@ -222,12 +222,14 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 - **TONE**: Evaluative / Growth
 - **VERDICT LABEL**: "Coaching Efficacy"
 - **METRICS (S1 - 1-10 Scores)**:
-  1. "Listening & Empathy"
+  1. "Listening and Empathy"
   2. "Questioning Quality"
   3. "Psychological Safety"
-  4. "Coaching vs Telling"
-  5. "Overall Coaching Effectiveness"
-- **STRENGTHS & IMPROVEMENTS**: Focus on safe space, blame language, leading questions, vs open questions.
+  4. "Coaching VS Telling"
+  5. "Overall Effectiveness Score"
+- **STRENGTHS & IMPROVEMENTS**:
+  - **Core Strengths**: specific behaviors (e.g. "avoidance of blame").
+  - **Primary Improvement Areas**: specific gaps (e.g. "reliance on leading questions").
 """
     elif scenario_type == "negotiation":
         specific_instruction = """
@@ -235,12 +237,13 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 - **TONE**: Results / Tactical
 - **VERDICT LABEL**: "Negotiation Power"
 - **METRICS (S2 - 1-10 Scores)**:
-  1. "Rapport Building"
-  2. "Needs Discovery"
-  3. "Objection Handling"
-  4. "Value Articulation"
-  5. "Negotiation Effectiveness"
-- **OBSERVATIONS**: Focus on discounting timing, probing depth, price reframe.
+  1. "Negotiation Effectiveness"
+  2. "Rapport Building"
+  3. "Needs Discovery"
+  4. "Objection Handling"
+  5. "Value Articulation"
+- **OBSERVATIONS**:
+  - **Key Observations**: tactical feedback (e.g. "discounting too early").
 """
     elif scenario_type == "reflection":
         specific_instruction = """
@@ -249,10 +252,10 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 - **VERDICT LABEL**: "Learning Insights"
 - **METRICS**: NONE. Do NOT generate scores.
 - **OUTPUT FOCUS**:
-  1. **Key Insights**: Patterns in user behavior (e.g. "You tend to explain before understanding").
-  2. **Coaching Questions**: Reflective questions for the user (e.g. "What signals did you miss?").
-  3. **Skill Focus Areas**: 3 specific skills to work on.
-  4. **Practice Suggestions**: Concrete actions (e.g. "Pause for 3 seconds").
+  1. **Critical Insights**: Pattern recognition (e.g. "explained before understanding").
+  2. **Skill Focus Areas**: 3 specific skills (e.g. "Questioning techniques").
+  3. **Practice Suggestions**: Concrete actions (e.g. "2-3 second pause").
+  4. **Coaching Questions**: (Optional) Reflective questions.
 - **IMPORTANT**: Return 'layer_1_pulse' as EMPTY LIST []. Do not invent scores.
 """
     elif scenario_type == "deescalation":
