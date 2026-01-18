@@ -154,9 +154,9 @@ export default function Report() {
                         <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                             {(() => {
                                 const st = (data.meta?.scenario_type || data.scenario_type || "").toLowerCase();
-                                if (st.includes("coaching")) return "Coaching Efficacy";
-                                if (st.includes("negotiation")) return "Negotiation Power";
-                                if (st.includes("reflection")) return "Learning Insights";
+                                if (st.includes("coaching")) return "Coaching Effectiveness";
+                                if (st.includes("negotiation")) return "Sales & Negotiation";
+                                if (st.includes("reflection")) return "Skill Development";
                                 return "Goal Attainment";
                             })()}
                         </div>

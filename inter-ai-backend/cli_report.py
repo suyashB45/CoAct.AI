@@ -218,44 +218,40 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     
     if scenario_type == "coaching":
         specific_instruction = """
-### SCENARIO 1: MANAGERIAL COACHING
+### SCENARIO 1: COACHING EFFECTIVENESS
 - **TONE**: Evaluative / Growth
 - **VERDICT LABEL**: "Coaching Efficacy"
 - **METRICS (S1 - 1-10 Scores)**:
   1. "Listening and Empathy"
   2. "Questioning Quality"
   3. "Psychological Safety"
-  4. "Coaching VS Telling"
-  5. "Overall Effectiveness Score"
+  4. "Coaching vs. Telling"
 - **STRENGTHS & IMPROVEMENTS**:
-  - **Core Strengths**: specific behaviors (e.g. "avoidance of blame").
-  - **Primary Improvement Areas**: specific gaps (e.g. "reliance on leading questions").
+  - **Focus Areas**: Creating safe dialogue spaces and allowing self-reflection vs directive "telling".
 """
     elif scenario_type == "negotiation":
         specific_instruction = """
-### SCENARIO 2: SALES & NEGOTIATION
+### SCENARIO 2: SALES AND NEGOTIATION
 - **TONE**: Results / Tactical
 - **VERDICT LABEL**: "Negotiation Power"
 - **METRICS (S2 - 1-10 Scores)**:
-  1. "Negotiation Effectiveness"
-  2. "Rapport Building"
-  3. "Needs Discovery"
-  4. "Objection Handling"
-  5. "Value Articulation"
+  1. "Rapport Building"
+  2. "Needs Discovery"
+  3. "Objection Handling"
+  4. "Value Articulation"
 - **OBSERVATIONS**:
-  - **Key Observations**: tactical feedback (e.g. "discounting too early").
+  - **Focus Areas**: Developing deeper need-based questioning and delaying price discounting until value is established.
 """
     elif scenario_type == "reflection":
         specific_instruction = """
-### SCENARIO 3: LEARNING REFLECTION (NO SCORES)
+### SCENARIO 3: SKILL DEVELOPMENT & LEARNING (NO SCORES)
 - **TONE**: Supportive / Deep
 - **VERDICT LABEL**: "Learning Insights"
 - **METRICS**: NONE. Do NOT generate scores.
 - **OUTPUT FOCUS**:
-  1. **Critical Insights**: Pattern recognition (e.g. "explained before understanding").
-  2. **Skill Focus Areas**: 3 specific skills (e.g. "Questioning techniques").
-  3. **Practice Suggestions**: Concrete actions (e.g. "2-3 second pause").
-  4. **Coaching Questions**: (Optional) Reflective questions.
+  1. **Critical Insights**: Pattern recognition (transitioning from feature-focused to needs exploration).
+  2. **Skill Focus Areas**: Questioning techniques, Active listening, Value-based communication.
+  3. **Practice Suggestions**: Implementing conversational pauses (2-3 seconds).
 - **IMPORTANT JSON MAPPING**:
   - Map "Critical Insights" -> to JSON field `micro_correction`
   - Map "Skill Focus Areas" -> to JSON field `shadow_impact`
@@ -513,6 +509,7 @@ class DashboardPDF(FPDF):
         emotional_trajectory = meta.get('emotional_trajectory', '')
         session_quality = meta.get('session_quality', '')
         key_themes = meta.get('key_themes', [])
+        overall_grade = meta.get('overall_grade', 'N/A')
         
         self.set_y(self.get_y() + 3)
         start_y = self.get_y()
@@ -542,17 +539,19 @@ class DashboardPDF(FPDF):
             "leadership": (99, 102, 241),  # Indigo (Authority)
             "customer_service": (239, 68, 68) # Red (Urgency/Resolution)
         }
+        
+        # New Labels matching frontend
         scenario_labels = {
-            "coaching": "COACHING & PERFORMANCE",
-            "negotiation": "SALES & NEGOTIATION",
-            "reflection": "LEARNING REFLECTION",
-            "custom": "CORPORATE SCENARIO",
+            "coaching": "COACHING EFFICACY",
+            "negotiation": "NEGOTIATION POWER",
+            "reflection": "LEARNING INSIGHTS",
+            "custom": "GOAL ATTAINMENT",
             "leadership": "LEADERSHIP & STRATEGY",
             "customer_service": "CUSTOMER SERVICE"
         }
         
         accent_color = scenario_colors.get(scenario_type, scenario_colors["custom"])
-        scenario_label = scenario_labels.get(scenario_type, scenario_labels["custom"])
+        verd_label = scenario_labels.get(scenario_type, scenario_labels["custom"])
         
         # Accent bar on left - scenario-specific color
         self.set_fill_color(*accent_color)
@@ -567,16 +566,24 @@ class DashboardPDF(FPDF):
             "leadership": "[L]", "customer_service": "[S]"
         }
         icon = icon_map.get(scenario_type, "[*]")
-        self.cell(100, 5, f"{icon} {scenario_label}", 0, 1)
+        self.cell(100, 5, f"{icon} {verd_label}", 0, 1)
+        
+        # Grade Display (Top Right)
+        if scenario_type != 'reflection':
+             self.set_xy(150, start_y + 6)
+             self.set_font('Arial', 'B', 24)
+             self.set_text_color(*COLORS['accent']) # Uses main accent
+             # Determine color based on grade if possible, else default accent
+             self.cell(40, 10, str(overall_grade), 0, 0, 'R')
         
         # Summary text
-        self.set_xy(18, self.get_y() + 3)
+        self.set_xy(18, start_y + 15)
         self.set_font('Arial', '', 10)
         self.set_text_color(51, 65, 85)
-        self.multi_cell(175, 5, sanitize_text(summary))
+        self.multi_cell(130, 5, sanitize_text(summary))
         
         # Metrics row with visual indicators
-        current_y = self.get_y() + 4
+        current_y = start_y + 35
         
         if emotional_trajectory:
             self.set_xy(18, current_y)
@@ -884,6 +891,14 @@ class DashboardPDF(FPDF):
 
 
 
+    def _extract_score_value(self, score_str):
+        try:
+            # Remove /10 or similar
+            clean = str(score_str).split('/')[0].strip()
+            return float(clean)
+        except:
+            return 0.0
+
     def draw_layer_1_pulse(self, pulse):
         """Draw Layer 1: The Pulse (Metrics)"""
         if not pulse: return
@@ -894,7 +909,7 @@ class DashboardPDF(FPDF):
         # Grid layout simulation using cells
         for metric in pulse:
             name = sanitize_text(metric.get('metric', 'Metric'))
-            score = str(metric.get('score', 'N/A'))
+            score_raw = str(metric.get('score', 'N/A'))
             insight = sanitize_text(metric.get('insight', ''))
             
             # Metric Box
@@ -905,15 +920,17 @@ class DashboardPDF(FPDF):
             self.set_text_color(*COLORS['secondary'])
             self.cell(190, 6, name.upper(), 0, 1)
             
-            # Score
-            self.set_font('Arial', 'B', 12)
-            if "Expert" in score or (score.replace('.','',1).isdigit() and float(score) >= 8):
+            # Score parsing and coloring
+            score_val = self._extract_score_value(score_raw)
+            if "Expert" in score_raw or score_val >= 8:
                 self.set_text_color(*COLORS['success'])
-            elif "Beginner" in score or (score.replace('.','',1).isdigit() and float(score) <= 4):
+            elif "Beginner" in score_raw or score_val <= 4:
                 self.set_text_color(*COLORS['danger'])
             else:
                 self.set_text_color(*COLORS['warning'])
-            self.cell(190, 6, f"Score: {score}", 0, 1)
+            
+            self.set_font('Arial', 'B', 12)
+            self.cell(190, 6, f"Score: {score_raw}", 0, 1)
             
             # Insight
             self.set_font('Arial', 'I', 9)
