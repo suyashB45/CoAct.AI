@@ -32,6 +32,7 @@ services:
     expose:
       - "8000"
     volumes:
+      - ./inter-ai-backend:/app
       - ./inter-ai-backend/reports:/app/reports
       - ./inter-ai-backend/static:/app/static
     environment:
@@ -44,6 +45,9 @@ services:
       - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
       - PYTHONPATH=/app
       - FLASK_ENV=production
+      - DATABASE_URL=postgresql://coactai:coact%40ai2026@db:5432/coact_ai
+    depends_on:
+      - db
     restart: always
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]

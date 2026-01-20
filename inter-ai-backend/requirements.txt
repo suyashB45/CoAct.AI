@@ -15,6 +15,3 @@ fastapi
 flask-sqlalchemy
 sqlalchemy
 psycopg2-binary
-psycopg2-binary
-sqlalchemy
-flask-sqlalchemy
