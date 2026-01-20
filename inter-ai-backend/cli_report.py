@@ -933,17 +933,18 @@ class DashboardPDF(FPDF):
             
             # Reset position for next row manually if multi_cell didn't perfectly align
             self.set_xy(x_start, y_start + row_height)
-            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height) # Bottom border
-            self.set_text_color(*COLORS['text_main']) # Reset color
+            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height)
+            self.set_text_color(*COLORS['text_main'])
 
     def draw_key_value_grid(self, title, data_dict, color=COLORS['secondary']):
         """Draw a grid of key-value pairs with better spacing."""
-        if not data_dict: return
+        if not data_dict:
+            return
         self.check_space(50)
         self.ln(8)
         self.draw_section_header(title, color)
         
-        self.set_fill_color(248, 250, 252) 
+        self.set_fill_color(248, 250, 252)
         self.rect(self.get_x(), self.get_y(), 190, len(data_dict)*8 + 5, 'F')
         self.ln(2)
 
@@ -953,7 +954,7 @@ class DashboardPDF(FPDF):
             
             self.set_font('Arial', 'B', 9)
             self.set_text_color(*COLORS['text_main'])
-            self.cell(60, 8, "  " + key_label + ":", 0, 0) # Indent
+            self.cell(60, 8, "  " + key_label + ":", 0, 0)
             
             self.set_font('Arial', '', 9)
             self.set_text_color(*COLORS['text_light'])
