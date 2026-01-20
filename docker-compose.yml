@@ -1,6 +1,10 @@
 services:
   frontend:
-    build: ./inter-ai-frontend
+    build:
+      context: ./inter-ai-frontend
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_KEY: ${VITE_SUPABASE_KEY}
     ports:
       - "80:80"
       - "443:443"
