@@ -936,7 +936,6 @@ class DashboardPDF(FPDF):
             self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height) # Bottom border
             self.set_text_color(*COLORS['text_main']) # Reset color
 
-    # Helper to draw key value grid
     def draw_key_value_grid(self, title, data_dict, color=COLORS['secondary']):
         """Draw a grid of key-value pairs with better spacing."""
         if not data_dict: return
