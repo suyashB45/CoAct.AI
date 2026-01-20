@@ -1,14 +1,17 @@
+
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { getApiUrl } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 const Login: React.FC = () => {
     const navigate = useNavigate();
-    const [email, setEmail] = useState('coactai');
-    const [password, setPassword] = useState('coact@ai2026');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -16,27 +19,38 @@ const Login: React.FC = () => {
         setLoading(true);
 
         try {
-            const response = await fetch(getApiUrl('/api/login'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: email, // Backend supports email or username via this field
-                    password: password
-                })
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
             });
-            const data = await response.json();
 
-            if (response.ok) {
-                // Save user data for session / isolation
-                localStorage.setItem('coact_user', JSON.stringify(data.user));
-                toast.success(`Welcome back, ${data.user.full_name || 'User'}!`);
-                navigate('/practice');
-            } else {
-                toast.error(data.error || "Invalid credentials");
+            if (error) throw error;
+
+            if (data.session) {
+                // Sync user with backend
+                const syncRes = await fetch(getApiUrl('/api/auth/sync'), {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${data.session.access_token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (syncRes.ok) {
+                    const user = data.user;
+                    localStorage.setItem('user', JSON.stringify({
+                        id: user?.id,
+                        email: user?.email,
+                    }));
+                    toast.success(`Welcome back!`);
+                    navigate('/practice');
+                } else {
+                    throw new Error('Backend sync failed');
+                }
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error("Login failed. Please check your connection.");
+            toast.error(err.message || "Login failed");
         } finally {
             setLoading(false);
         }
@@ -45,7 +59,6 @@ const Login: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden hero-ultra-modern">
             {/* Background elements inherited from hero-ultra-modern in index.css */}
-
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/20 rounded-full blur-[100px] animate-pulse-glow" />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[100px] animate-pulse-glow" style={{ animationDelay: '1s' }} />
@@ -88,13 +101,20 @@ const Login: React.FC = () => {
                         <div className="relative group">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-400 transition-colors w-5 h-5" />
                             <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-10 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all font-sans"
+                                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-10 py-3 pr-12 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all font-sans"
                                 placeholder="••••••••"
                                 required
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-purple-400 transition-colors"
+                            >
+                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
                         </div>
                     </div>
 

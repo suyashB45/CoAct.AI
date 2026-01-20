@@ -12,6 +12,12 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI, OpenAI
 
 load_dotenv()
+from supabase import create_client, Client
+
+# Initialize Supabase Client
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
 
 # ---------------------------------------------------------
 # Custom Modules & Setup
@@ -27,17 +33,28 @@ except ImportError as e:
     def analyze_full_report_data(*args, **kwargs): return {}
     def detect_scenario_type(*args, **kwargs): return "custom"
 
-# Database Models (optional - fallback to in-memory if unavailable)
-USE_DATABASE = False
-# try:
-#     from models import init_db, get_session_by_id, create_session, update_session, save_report, Session, SessionLocal
-#     init_db()
-#     print("✅ Database connection established")
-# except Exception as e:
-#     print(f"⚠️ Database not available, using in-memory storage: {e}")
-#     USE_DATABASE = False
+# Database Models
+USE_DATABASE = True
 
+# Create Flask app first (always needed)
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+try:
+    from models import init_db, get_session_by_id, create_session, update_session, save_report_metrics, get_user_history, db
+    
+    # Configure Database URI
+    # Default to the service name 'db' from docker-compose
+    # Default to the Supabase connection provided
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://postgres:Coact%40ai2026@db.apcvglomdnhqfffznbyn.supabase.co:6543/postgres?sslmode=require')
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    init_db(app)
+    print("✅ Database connection established")
+except Exception as e:
+    print(f"⚠️ Database initialization failed: {e}")
+    USE_DATABASE = True
+
+# Enable CORS
 flask_cors.CORS(app)
 
 # ---------------------------------------------------------
@@ -68,30 +85,30 @@ def get_session(session_id: str) -> Dict[str, Any]:
     
     return None
 
-def save_session_to_db(session_id: str, session_data: dict):
+def save_session_to_db(session_id: str, session_data: dict, user_id: int = None):
     """Save session to database (async-safe)."""
     if not USE_DATABASE:
         return
     
     try:
-        db_session = get_session_by_id(session_id)
-        if db_session:
-            # Update existing
-            update_session(session_id, {
-                "transcript": session_data.get("transcript", []),
-                "report_data": session_data.get("report_data", {}),
-                "status": "completed" if session_data.get("completed") else "active"
-            })
-        else:
-            # Create new
-            create_session(session_id, {
-                "role": session_data.get("role"),
-                "ai_role": session_data.get("ai_role"),
-                "scenario": session_data.get("scenario"),
-                "framework": session_data.get("framework"),
-                "mode": session_data.get("mode", "coaching"),
-                "transcript": session_data.get("transcript", [])
-            })
+        # We need an app context for threading
+        with app.app_context():
+            db_session = get_session_by_id(session_id)
+            if db_session:
+                # Update existing
+                update_session(session_id, {
+                    "transcript": session_data.get("transcript", []),
+                    "report_data": session_data.get("report_data", {}),
+                    "status": "completed" if session_data.get("completed") else "active"
+                })
+            else:
+                # Create new
+                create_session(session_id, {
+                    "role": session_data.get("role"),
+                    "ai_role": session_data.get("ai_role"),
+                    "scenario_type": session_data.get("scenario_type", "custom"),
+                    "transcript": session_data.get("transcript", [])
+                }, user_id=user_id)
     except Exception as e:
         print(f"Database save error: {e}")
 
@@ -384,6 +401,53 @@ Current turn: {turn_count + 1}
 # AUDIO_DIR = ...
 
 
+# ---------------------------------------------------------
+# Auth & User Endpoints
+# ---------------------------------------------------------
+
+@app.route("/api/auth/sync", methods=["POST"])
+def sync_user():
+    """Verify Supabase token and return user info."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "No token provided"}), 401
+    
+    try:
+        token = auth_header.replace("Bearer ", "")
+        res = supabase.auth.get_user(token)
+        user = res.user
+        
+        if not user:
+             return jsonify({"error": "Invalid token"}), 401
+        
+        # No local user table - Supabase Auth handles everything
+        return jsonify({"success": True, "user": {"id": user.id, "email": user.email}})
+        
+    except Exception as e:
+        print(f"Auth sync error: {e}")
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    """Get practice history for the authenticated user."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    try:
+        token = auth_header.replace("Bearer ", "")
+        res = supabase.auth.get_user(token)
+        user = res.user
+        
+        if not user:
+            return jsonify({"error": "Invalid token"}), 401
+            
+        sessions = get_user_history(user.id)
+        return jsonify([s.to_dict() for s in sessions])
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @app.route("/api/health")
 def health_check():
     """Health check endpoint for VM monitoring"""
@@ -636,7 +700,9 @@ def start_session():
     SESSIONS[session_id] = session_data
     
     # Save to database
-    save_session_to_db(session_id, session_data)
+    # Get user_id from request if available (from frontend)
+    user_id = data.get("user_id") 
+    save_session_to_db(session_id, session_data, user_id=user_id)
 
     return jsonify({"session_id": session_id, "summary": summary, "framework": framework, "scenario_type": scenario_type})
 

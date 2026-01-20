@@ -854,6 +854,7 @@ class DashboardPDF(FPDF):
             self.ln(2)
         
         self.ln(5)
+
     def _extract_score_value(self, score_str):
         try:
             # Remove /10 or similar
@@ -863,18 +864,18 @@ class DashboardPDF(FPDF):
             return 0.0
 
     # --- SCENARIO SPECIFIC DRAWING METHODS ---
+
     def draw_scorecard(self, scorecard):
         """Draw a standard scorecard table with zebra striping."""
-        if not scorecard: 
-            return
+        if not scorecard: return
         self.check_space(60)
-        self.ln(8) 
+        self.ln(8) # Extra spacing
         self.draw_section_header("PERFORMANCE SCORECARD", COLORS['primary'])
         
         # Table Header
-        self.set_fill_color(30, 41, 59) 
+        self.set_fill_color(30, 41, 59) # Dark header
         self.set_font('Arial', 'B', 9)
-        self.set_text_color(255, 255, 255) 
+        self.set_text_color(255, 255, 255) # White text
         self.cell(50, 9, "DIMENSION", 0, 0, 'L', True)
         self.cell(20, 9, "SCORE", 0, 0, 'C', True)
         self.cell(120, 9, "OBSERVATION", 0, 1, 'L', True)
@@ -890,17 +891,19 @@ class DashboardPDF(FPDF):
             
             # Zebra striping
             if i % 2 == 0:
-                self.set_fill_color(248, 250, 252)
+                self.set_fill_color(248, 250, 252) # Very light gray
             else:
-                self.set_fill_color(255, 255, 255)
+                self.set_fill_color(255, 255, 255) # White
             
             self.set_font('Arial', 'B', 9)
             self.set_text_color(*COLORS['text_main'])
             
+            # Draw row background
             x_start = self.get_x()
             y_start = self.get_y()
             self.cell(50, row_height, dim, 0, 0, 'L', True)
             
+            # Score Color
             try:
                 s_val = float(score.split('/')[0])
                 if s_val >= 8: self.set_text_color(*COLORS['success'])
@@ -914,22 +917,23 @@ class DashboardPDF(FPDF):
             self.set_font('Arial', '', 9)
             self.set_text_color(*COLORS['text_light'])
             
+            # Multi-cell handling with background fill
             self.set_xy(x_start + 70, y_start)
             self.multi_cell(120, row_height, desc, border=0, align='L', fill=True)
             
+            # Reset position for next row manually if multi_cell didn't perfectly align
             self.set_xy(x_start, y_start + row_height)
-            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height)
-            self.set_text_color(*COLORS['text_main'])
+            self.line(x_start, y_start + row_height, x_start + 190, y_start + row_height) # Bottom border
+            self.set_text_color(*COLORS['text_main']) # Reset color
 
     def draw_key_value_grid(self, title, data_dict, color=COLORS['secondary']):
         """Draw a grid of key-value pairs with better spacing."""
-        if not data_dict:
-            return
+        if not data_dict: return
         self.check_space(50)
         self.ln(8)
         self.draw_section_header(title, color)
         
-        self.set_fill_color(248, 250, 252)
+        self.set_fill_color(248, 250, 252) 
         self.rect(self.get_x(), self.get_y(), 190, len(data_dict)*8 + 5, 'F')
         self.ln(2)
 
@@ -939,12 +943,13 @@ class DashboardPDF(FPDF):
             
             self.set_font('Arial', 'B', 9)
             self.set_text_color(*COLORS['text_main'])
-            self.cell(60, 8, "  " + key_label + ":", 0, 0)
+            self.cell(60, 8, "  " + key_label + ":", 0, 0) # Indent
             
             self.set_font('Arial', '', 9)
             self.set_text_color(*COLORS['text_light'])
             self.multi_cell(0, 8, val_text)
         self.ln(2)
+
     def draw_list_section(self, title, items, color=COLORS['section_comm'], bullet="•"):
         """Draw a bulleted list section with icons."""
         if not items: return

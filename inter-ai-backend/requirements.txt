@@ -5,13 +5,15 @@ azure-storage-blob
 azure-cognitiveservices-speech
 python-dotenv
 fpdf
+supabase
+reportlab
 matplotlib
 numpy
 faiss-cpu
 requests
 uvicorn
-dotenv
-fastapi
 flask-sqlalchemy
 sqlalchemy
 psycopg2-binary
+bcrypt
+flask-bcrypt

@@ -6,6 +6,8 @@ import Practice from './pages/Practice'
 import Conversation from './pages/Conversation'
 import Report from './pages/Report'
 import SessionHistory from './pages/SessionHistory'
+import Profile from './pages/Profile'
+import ProtectedRoute from './components/ProtectedRoute'
 
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -27,10 +29,11 @@ function AppContent() {
                     <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
-                    <Route path="/practice" element={<Practice />} />
-                    <Route path="/history" element={<SessionHistory />} />
-                    <Route path="/conversation/:sessionId" element={<Conversation />} />
-                    <Route path="/report/:sessionId" element={<Report />} />
+                    <Route path="/practice" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                    <Route path="/history" element={<ProtectedRoute><SessionHistory /></ProtectedRoute>} />
+                    <Route path="/conversation/:sessionId" element={<ProtectedRoute><Conversation /></ProtectedRoute>} />
+                    <Route path="/report/:sessionId" element={<ProtectedRoute><Report /></ProtectedRoute>} />
                 </Routes>
             </motion.div>
         </AnimatePresence>
