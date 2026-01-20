@@ -27,81 +27,21 @@ except ImportError as e:
     def analyze_full_report_data(*args, **kwargs): return {}
     def detect_scenario_type(*args, **kwargs): return "custom"
 
-# Database Models
-USE_DATABASE = True
-try:
-    from models import init_db, get_session_by_id, create_session, update_session, save_report_metrics, get_user_by_email, get_user_history, create_user, db
-    
-    # Configure Database URI
-    # Default to the service name 'db' from docker-compose
-    app = Flask(__name__, static_folder='static', static_url_path='/static')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://postgres:your_secure_password@db:5432/coact_ai')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    init_db(app)
-    print("✅ Database connection established")
-except Exception as e:
-    print(f"⚠️ Database initialization failed: {e}")
-    USE_DATABASE = False
-
-# app = Flask(...) moved up to db init block
-flask_cors.CORS(app)
+# ---------------------------------------------------------
+# Flask App Initialization
+# ---------------------------------------------------------
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 flask_cors.CORS(app)
 
 # ---------------------------------------------------------
-# In-Memory Storage (Fallback if Database not available)
+# In-Memory Storage
 # ---------------------------------------------------------
 SESSIONS: Dict[str, Dict[str, Any]] = {}
 
-# ---------------------------------------------------------
-# Hybrid Storage Helper Functions
-# ---------------------------------------------------------
 def get_session(session_id: str) -> Dict[str, Any]:
-    """Get session from database or in-memory storage."""
-    # Always check in-memory first (for active sessions)
-    if session_id in SESSIONS:
-        return SESSIONS[session_id]
-    
-    # Try database if available
-    if USE_DATABASE:
-        try:
-            db_session = get_session_by_id(session_id)
-            if db_session:
-                # Convert to dict and cache in memory
-                session_data = db_session.to_dict()
-                SESSIONS[session_id] = session_data
-                return session_data
-        except Exception as e:
-            print(f"Database lookup error: {e}")
-    
-    return None
+    """Get session from in-memory storage."""
+    return SESSIONS.get(session_id)
 
-def save_session_to_db(session_id: str, session_data: dict, user_id: int = None):
-    """Save session to database (async-safe)."""
-    if not USE_DATABASE:
-        return
-    
-    try:
-        # We need an app context for threading
-        with app.app_context():
-            db_session = get_session_by_id(session_id)
-            if db_session:
-                # Update existing
-                update_session(session_id, {
-                    "transcript": session_data.get("transcript", []),
-                    "report_data": session_data.get("report_data", {}),
-                    "status": "completed" if session_data.get("completed") else "active"
-                })
-            else:
-                # Create new
-                create_session(session_id, {
-                    "role": session_data.get("role"),
-                    "ai_role": session_data.get("ai_role"),
-                    "scenario_type": session_data.get("scenario_type", "custom"),
-                    "transcript": session_data.get("transcript", [])
-                }, user_id=user_id)
-    except Exception as e:
-        print(f"Database save error: {e}")
 
 # ---------------------------------------------------------
 # Configuration & Paths
@@ -388,72 +328,13 @@ Current turn: {turn_count + 1}
 # Endpoints
 # ---------------------------------------------------------
 
-# Audio Persistence Helpers Removed
-# AUDIO_DIR = ...
-
-
-# ---------------------------------------------------------
-# Auth & User Endpoints
-# ---------------------------------------------------------
-
-@app.route("/api/signup", methods=["POST"])
-def signup():
-    """Register a new user."""
-    if not USE_DATABASE:
-        return jsonify({"error": "Database not configured"}), 503
-        
-    data = request.get_json()
-    if not data.get('email') or not data.get('password'):
-        return jsonify({"error": "Email and password required"}), 400
-        
-    user, error = create_user(data)
-    if error:
-        return jsonify({"error": error}), 400
-        
-    return jsonify({
-        "success": True, 
-        "message": "User created successfully",
-        "user": user.to_dict()
-    })
-
-@app.route("/api/login", methods=["POST"])
-def login():
-    """Authenticate user against database."""
-    if not USE_DATABASE:
-        return jsonify({"error": "Database not configured"}), 503
-        
-    data = request.get_json()
-    email = data.get("email") or data.get("username") # Support both as per frontend
-    password = data.get("password")
-    
-    user = get_user_by_email(email)
-    
-    # Simple password check (Hash comparison should be used in prod)
-    # Using direct string compare for the demo/default user
-    if user and user.password_hash == password:
-        return jsonify({
-            "success": True,
-            "user": user.to_dict()
-        })
-        
-    return jsonify({"error": "Invalid credentials"}), 401
-
-@app.route("/api/history/<int:user_id>", methods=["GET"])
-def get_history(user_id):
-    """Get practice history strictly for the logged-in user."""
-    if not USE_DATABASE:
-        return jsonify([])
-        
-    sessions = get_user_history(user_id)
-    return jsonify([s.to_dict() for s in sessions])
-
 @app.route("/api/health")
 def health_check():
     """Health check endpoint for VM monitoring"""
     return jsonify({
         "status": "healthy",
         "timestamp": dt.datetime.now().isoformat(),
-        "version": "enhanced-reports-v1.0",
+        "version": "no-database-v1.0",
         "services": {
             "llm": "connected" if client else "disconnected",
             "reports": "available",
@@ -461,7 +342,6 @@ def health_check():
         }
     })
 
-# Audio serving route removed
 
 
 @app.route("/api/transcribe", methods=["POST"])

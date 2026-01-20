@@ -45,9 +45,6 @@ services:
       - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
       - PYTHONPATH=/app
       - FLASK_ENV=production
-      - DATABASE_URL=postgresql://coactai:coact%40ai2026@db:5432/coact_ai
-    depends_on:
-      - db
     restart: always
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
@@ -66,21 +63,3 @@ services:
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
-
-  db:
-    image: postgres:15-alpine
-    container_name: coactai-db-1
-    environment:
-      POSTGRES_USER: coactai
-      POSTGRES_PASSWORD: coact@ai2026
-      POSTGRES_DB: coact_ai
-    volumes:
-      # Maps the database files to the VM's disk for safety
-      - postgres_data:/var/lib/postgresql/data
-      - ./inter-ai-backend/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    restart: always
-
-volumes:
-  postgres_data:
