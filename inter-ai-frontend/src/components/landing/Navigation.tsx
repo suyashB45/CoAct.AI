@@ -104,13 +104,22 @@ const Navigation = () => {
                     {/* CTA Button */}
                     <div className="hidden md:flex items-center gap-4">
                         <motion.button
+                            className="text-slate-300 hover:text-white font-medium text-sm transition-colors"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.2 }}
+                            onClick={() => navigate('/login')}
+                        >
+                            Sign In
+                        </motion.button>
+                        <motion.button
                             className="bg-white text-slate-950 px-5 py-2.5 rounded-full text-sm font-bold hover:bg-blue-50 transition-colors flex items-center gap-2 shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)]"
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.3 }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => navigate('/practice')}
+                            onClick={() => navigate('/signup')}
                         >
                             Get Started <ChevronRight className="w-4 h-4" />
                         </motion.button>
@@ -145,15 +154,26 @@ const Navigation = () => {
                                         {item.name}
                                     </button>
                                 ))}
-                                <button
-                                    onClick={() => {
-                                        navigate('/practice');
-                                        setIsMobileMenuOpen(false);
-                                    }}
-                                    className="w-full mt-4 bg-blue-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2"
-                                >
-                                    Get Started <ChevronRight className="w-4 h-4" />
-                                </button>
+                                <div className="pt-4 flex flex-col gap-3">
+                                    <button
+                                        onClick={() => {
+                                            navigate('/login');
+                                            setIsMobileMenuOpen(false);
+                                        }}
+                                        className="block w-full text-center px-4 py-3 rounded-xl font-medium text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+                                    >
+                                        Sign In
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            navigate('/signup');
+                                            setIsMobileMenuOpen(false);
+                                        }}
+                                        className="w-full bg-blue-600 text-white px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+                                    >
+                                        Get Started <ChevronRight className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     )}

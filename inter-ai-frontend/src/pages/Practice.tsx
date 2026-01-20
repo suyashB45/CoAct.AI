@@ -105,8 +105,9 @@ export default function Practice() {
                     role: data.role,
                     ai_role: data.ai_role,
                     scenario: data.scenario,
-                    framework: 'auto',  // AI will automatically choose the best framework
-                    scenario_type: data.scenario_type // Let backend auto-detect if not provided
+                    framework: 'auto',
+                    scenario_type: data.scenario_type,
+                    user_id: JSON.parse(localStorage.getItem('coact_user') || '{}').id
                 })
             })
 

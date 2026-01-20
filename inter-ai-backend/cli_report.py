@@ -855,18 +855,6 @@ class DashboardPDF(FPDF):
         
         self.ln(5)
 
-
-
-
-
-
-
-
-
-
-
-
-
     def _extract_score_value(self, score_str):
         try:
             # Remove /10 or similar

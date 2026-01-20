@@ -7,6 +7,9 @@ import Conversation from './pages/Conversation'
 import Report from './pages/Report'
 import SessionHistory from './pages/SessionHistory'
 
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+
 function AppContent() {
     const location = useLocation()
 
@@ -22,6 +25,8 @@ function AppContent() {
             >
                 <Routes location={location} key={location.pathname}>
                     <Route path="/" element={<Home />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
                     <Route path="/practice" element={<Practice />} />
                     <Route path="/history" element={<SessionHistory />} />
                     <Route path="/conversation/:sessionId" element={<Conversation />} />

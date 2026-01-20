@@ -27,8 +27,14 @@ export default function SessionHistory() {
     useEffect(() => {
         const fetchSessions = async () => {
             try {
-                // Fetch from backend
-                const res = await fetch(getApiUrl('/api/sessions'))
+                // Fetch from backend using user ID
+                const user = JSON.parse(localStorage.getItem('coact_user') || '{}');
+                if (!user.id) {
+                    // Redirect if no user
+                    navigate('/login');
+                    return;
+                }
+                const res = await fetch(getApiUrl(`/api/history/${user.id}`))
                 if (!res.ok) throw new Error('Failed to fetch sessions')
 
                 const data = await res.json()

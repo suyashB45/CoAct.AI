@@ -132,7 +132,7 @@ const HeroSection = () => {
                                 className="btn-ultra-modern text-lg px-8 py-4 w-full sm:w-auto flex items-center justify-center"
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => navigate('/practice')}
+                                onClick={() => navigate('/signup')}
                             >
                                 Get Started Free
                                 <ArrowRight className="w-5 h-5 ml-2" />
