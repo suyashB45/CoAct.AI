@@ -27,21 +27,73 @@ except ImportError as e:
     def analyze_full_report_data(*args, **kwargs): return {}
     def detect_scenario_type(*args, **kwargs): return "custom"
 
-# ---------------------------------------------------------
-# Flask App Initialization
-# ---------------------------------------------------------
+# Database Models (optional - fallback to in-memory if unavailable)
+USE_DATABASE = False
+# try:
+#     from models import init_db, get_session_by_id, create_session, update_session, save_report, Session, SessionLocal
+#     init_db()
+#     print("✅ Database connection established")
+# except Exception as e:
+#     print(f"⚠️ Database not available, using in-memory storage: {e}")
+#     USE_DATABASE = False
+
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 flask_cors.CORS(app)
 
 # ---------------------------------------------------------
-# In-Memory Storage
+# In-Memory Storage (Fallback if Database not available)
 # ---------------------------------------------------------
 SESSIONS: Dict[str, Dict[str, Any]] = {}
 
+# ---------------------------------------------------------
+# Hybrid Storage Helper Functions
+# ---------------------------------------------------------
 def get_session(session_id: str) -> Dict[str, Any]:
-    """Get session from in-memory storage."""
-    return SESSIONS.get(session_id)
+    """Get session from database or in-memory storage."""
+    # Always check in-memory first (for active sessions)
+    if session_id in SESSIONS:
+        return SESSIONS[session_id]
+    
+    # Try database if available
+    if USE_DATABASE:
+        try:
+            db_session = get_session_by_id(session_id)
+            if db_session:
+                # Convert to dict and cache in memory
+                session_data = db_session.to_dict()
+                SESSIONS[session_id] = session_data
+                return session_data
+        except Exception as e:
+            print(f"Database lookup error: {e}")
+    
+    return None
 
+def save_session_to_db(session_id: str, session_data: dict):
+    """Save session to database (async-safe)."""
+    if not USE_DATABASE:
+        return
+    
+    try:
+        db_session = get_session_by_id(session_id)
+        if db_session:
+            # Update existing
+            update_session(session_id, {
+                "transcript": session_data.get("transcript", []),
+                "report_data": session_data.get("report_data", {}),
+                "status": "completed" if session_data.get("completed") else "active"
+            })
+        else:
+            # Create new
+            create_session(session_id, {
+                "role": session_data.get("role"),
+                "ai_role": session_data.get("ai_role"),
+                "scenario": session_data.get("scenario"),
+                "framework": session_data.get("framework"),
+                "mode": session_data.get("mode", "coaching"),
+                "transcript": session_data.get("transcript", [])
+            })
+    except Exception as e:
+        print(f"Database save error: {e}")
 
 # ---------------------------------------------------------
 # Configuration & Paths
@@ -328,13 +380,17 @@ Current turn: {turn_count + 1}
 # Endpoints
 # ---------------------------------------------------------
 
+# Audio Persistence Helpers Removed
+# AUDIO_DIR = ...
+
+
 @app.route("/api/health")
 def health_check():
     """Health check endpoint for VM monitoring"""
     return jsonify({
         "status": "healthy",
         "timestamp": dt.datetime.now().isoformat(),
-        "version": "no-database-v1.0",
+        "version": "enhanced-reports-v1.0",
         "services": {
             "llm": "connected" if client else "disconnected",
             "reports": "available",
@@ -342,6 +398,7 @@ def health_check():
         }
     })
 
+# Audio serving route removed
 
 
 @app.route("/api/transcribe", methods=["POST"])
@@ -579,9 +636,7 @@ def start_session():
     SESSIONS[session_id] = session_data
     
     # Save to database
-    # Get user_id from request if available (from frontend)
-    user_id = data.get("user_id") 
-    save_session_to_db(session_id, session_data, user_id=user_id)
+    save_session_to_db(session_id, session_data)
 
     return jsonify({"session_id": session_id, "summary": summary, "framework": framework, "scenario_type": scenario_type})
 
