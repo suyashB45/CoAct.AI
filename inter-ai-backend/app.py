@@ -15,9 +15,13 @@ load_dotenv()
 from supabase import create_client, Client
 
 # Initialize Supabase Client
+# Use anon key for auth verification (respects RLS)
 url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
+key: str = os.environ.get("SUPABASE_KEY")  # Anon key for auth operations
+service_key: str = os.environ.get("SUPABASE_SERVICE_KEY", key)  # Service key for admin ops (bypasses RLS)
+
+supabase: Client = create_client(url, key)  # For auth verification
+supabase_admin: Client = create_client(url, service_key) if service_key else supabase  # For database writes
 
 # ---------------------------------------------------------
 # Custom Modules & Setup
@@ -84,6 +88,39 @@ def get_session(session_id: str) -> Dict[str, Any]:
             print(f"Database lookup error: {e}")
     
     return None
+
+def get_authenticated_user():
+    """Get the authenticated user from the Authorization header."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+    
+    try:
+        token = auth_header.replace("Bearer ", "")
+        res = supabase.auth.get_user(token)
+        return res.user
+    except Exception as e:
+        print(f"Auth error: {e}")
+        return None
+
+def verify_session_ownership(session_id: str, user_id: str = None) -> bool:
+    """Verify that the session belongs to the specified user."""
+    sess = get_session(session_id)
+    if not sess:
+        return False
+    
+    # If no user_id provided, always allow (backward compatibility for unauthenticated sessions)
+    if not user_id:
+        return True
+    
+    # Check if session has user_id field
+    session_user_id = sess.get("user_id")
+    if not session_user_id:
+        # Legacy session without user_id - allow access
+        return True
+    
+    # Compare user IDs (convert to string for comparison)
+    return str(session_user_id) == str(user_id)
 
 def save_session_to_db(session_id: str, session_data: dict, user_id: int = None):
     """Save session to database (async-safe)."""
@@ -681,7 +718,10 @@ def start_session():
     summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode), max_tokens=150)
     summary = sanitize_llm_output(summary)
     
-    # Store session in memory with scenario_type
+    # Get user_id from request if available (from frontend)
+    user_id = data.get("user_id")
+    
+    # Store session in memory with scenario_type and user_id
     session_data = {
         "id": session_id,
         "created_at": dt.datetime.now().isoformat(),
@@ -695,13 +735,12 @@ def start_session():
         "report_data": {},
         "completed": False,
         "report_file": None,
+        "user_id": user_id,  # Store user_id for ownership verification
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
     
     # Save to database
-    # Get user_id from request if available (from frontend)
-    user_id = data.get("user_id") 
     save_session_to_db(session_id, session_data, user_id=user_id)
 
     return jsonify({"session_id": session_id, "summary": summary, "framework": framework, "scenario_type": scenario_type})

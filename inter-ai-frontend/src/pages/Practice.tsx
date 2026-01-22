@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "../lib/api"
+import { supabase } from "../lib/supabase"
 
 const ICON_MAP: any = {
     Users, ShoppingCart, GraduationCap, AlertTriangle, DollarSign, UserCog
@@ -97,6 +98,17 @@ export default function Practice() {
     }) => {
         setLoading(true)
         try {
+            // Get authenticated user from Supabase
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast.error("Please log in", {
+                    description: "You need to be logged in to start a session."
+                });
+                setLoading(false);
+                return;
+            }
+
             // Call backend to create session
             const response = await fetch(getApiUrl('/session/start'), {
                 method: 'POST',
@@ -107,7 +119,7 @@ export default function Practice() {
                     scenario: data.scenario,
                     framework: 'auto',
                     scenario_type: data.scenario_type,
-                    user_id: JSON.parse(localStorage.getItem('coact_user') || '{}').id
+                    user_id: user.id  // Use Supabase user ID
                 })
             })
 

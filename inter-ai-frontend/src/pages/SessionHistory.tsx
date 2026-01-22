@@ -7,9 +7,11 @@ import { motion } from "framer-motion"
 
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "../lib/api"
+import { supabase } from "../lib/supabase"
 
 interface SessionItem {
     id: string
+    session_id: string
     created_at: string
     role: string
     ai_role: string
@@ -27,31 +29,45 @@ export default function SessionHistory() {
     useEffect(() => {
         const fetchSessions = async () => {
             try {
-                // Fetch from backend using user ID
-                const user = JSON.parse(localStorage.getItem('coact_user') || '{}');
-                if (!user.id) {
-                    // Redirect if no user
+                // Get current user from Supabase
+                const { data: { user } } = await supabase.auth.getUser();
+
+                if (!user) {
+                    // Redirect if no authenticated user
                     navigate('/login');
                     return;
                 }
-                const res = await fetch(getApiUrl(`/api/history/${user.id}`))
+
+                // Get session for API calls with auth token
+                const { data: { session } } = await supabase.auth.getSession();
+
+                if (!session) {
+                    navigate('/login');
+                    return;
+                }
+
+                // Fetch from backend using authenticated endpoint
+                const res = await fetch(getApiUrl('/api/history'), {
+                    headers: {
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
                 if (!res.ok) throw new Error('Failed to fetch sessions')
 
                 const data = await res.json()
 
-                // Map backend format to frontend interface if needed
-                // Backend returns: SessionModel.to_dict()
-                // Frontend SessionItem expects: id, created_at, role, ai_role...
-                // They match mostly. We just need to ensure correct mapping.
-
+                // Map backend format to frontend interface
                 const mappedSessions = data.map((s: any) => ({
-                    id: s.id,
-                    created_at: s.created_at,
+                    id: s.session_id || s.id,
+                    session_id: s.session_id || s.id,
+                    created_at: s.date || s.created_at,
                     role: s.role,
                     ai_role: s.ai_role,
-                    scenario: s.scenario,
+                    scenario: s.scenario_type || s.scenario,
                     completed: s.completed,
-                    fit_score: s.fit_score // Ensure backend sends this
+                    fit_score: s.score || s.fit_score || 0
                 }))
 
                 setSessions(mappedSessions)

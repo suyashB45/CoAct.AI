@@ -96,7 +96,7 @@ const Login: React.FC = () => {
                     <div className="space-y-2">
                         <div className="flex justify-between items-center">
                             <label className="text-sm font-medium text-gray-300 ml-1">Password</label>
-                            <a href="#" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">Forgot password?</a>
+                            <Link to="/forgot-password" className="text-xs text-purple-400 hover:text-purple-300 transition-colors">Forgot password?</Link>
                         </div>
                         <div className="relative group">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-400 transition-colors w-5 h-5" />

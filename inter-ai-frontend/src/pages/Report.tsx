@@ -7,6 +7,7 @@ import { motion, Variants } from "framer-motion"
 
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "@/lib/api"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 
 // --- TYPES & INTERFACES (UNCHANGED) ---
@@ -108,7 +109,17 @@ export default function Report() {
         const fetchReport = async () => {
             try {
                 if (!sessionId) return
-                const response = await fetch(getApiUrl(`/api/session/${sessionId}/report_data`))
+
+                // Get auth token for authenticated request
+                const { data: { session } } = await supabase.auth.getSession();
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json'
+                };
+                if (session?.access_token) {
+                    headers['Authorization'] = `Bearer ${session.access_token}`;
+                }
+
+                const response = await fetch(getApiUrl(`/api/session/${sessionId}/report_data`), { headers })
                 if (!response.ok) throw new Error("Failed to fetch report data")
                 const data: GenericReportData = await response.json()
                 setData(data)
@@ -123,7 +134,14 @@ export default function Report() {
 
     const handleDownload = async () => {
         try {
-            const response = await fetch(getApiUrl(`/api/report/${sessionId}`))
+            // Get auth token for authenticated request
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = {};
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+
+            const response = await fetch(getApiUrl(`/api/report/${sessionId}`), { headers })
             if (!response.ok) throw new Error("Failed to generate PDF")
             const blob = await response.blob()
             const url = window.URL.createObjectURL(blob)

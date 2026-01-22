@@ -11,6 +11,9 @@ import ProtectedRoute from './components/ProtectedRoute'
 
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
+import AuthCallback from './pages/AuthCallback'
 
 function AppContent() {
     const location = useLocation()
@@ -29,6 +32,9 @@ function AppContent() {
                     <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/auth/callback" element={<AuthCallback />} />
                     <Route path="/practice" element={<ProtectedRoute><Practice /></ProtectedRoute>} />
                     <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                     <Route path="/history" element={<ProtectedRoute><SessionHistory /></ProtectedRoute>} />
