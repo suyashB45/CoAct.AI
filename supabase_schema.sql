@@ -28,10 +28,10 @@ CREATE INDEX idx_practice_history_created_at ON public.practice_history(created_
 
 ALTER TABLE public.practice_history ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own sessions" ON public.practice_history FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own sessions" ON public.practice_history FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own sessions" ON public.practice_history FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own sessions" ON public.practice_history FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own sessions" ON public.practice_history FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own sessions" ON public.practice_history FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can update own sessions" ON public.practice_history FOR UPDATE USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own sessions" ON public.practice_history FOR DELETE USING ((select auth.uid()) = user_id);
 
 
 -- ============================================================
@@ -52,10 +52,10 @@ CREATE INDEX idx_coaching_reports_user_id ON public.coaching_reports(user_id);
 
 ALTER TABLE public.coaching_reports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own coaching" ON public.coaching_reports FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own coaching" ON public.coaching_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own coaching" ON public.coaching_reports FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own coaching" ON public.coaching_reports FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own coaching" ON public.coaching_reports FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own coaching" ON public.coaching_reports FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can update own coaching" ON public.coaching_reports FOR UPDATE USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own coaching" ON public.coaching_reports FOR DELETE USING ((select auth.uid()) = user_id);
 
 
 -- ============================================================
@@ -76,10 +76,10 @@ CREATE INDEX idx_sales_reports_user_id ON public.sales_reports(user_id);
 
 ALTER TABLE public.sales_reports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own sales" ON public.sales_reports FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own sales" ON public.sales_reports FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own sales" ON public.sales_reports FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own sales" ON public.sales_reports FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own sales" ON public.sales_reports FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own sales" ON public.sales_reports FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can update own sales" ON public.sales_reports FOR UPDATE USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own sales" ON public.sales_reports FOR DELETE USING ((select auth.uid()) = user_id);
 
 
 -- ============================================================
@@ -99,10 +99,10 @@ CREATE INDEX idx_learning_plans_user_id ON public.learning_plans(user_id);
 
 ALTER TABLE public.learning_plans ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own learning" ON public.learning_plans FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own learning" ON public.learning_plans FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own learning" ON public.learning_plans FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own learning" ON public.learning_plans FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own learning" ON public.learning_plans FOR SELECT USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own learning" ON public.learning_plans FOR INSERT WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Users can update own learning" ON public.learning_plans FOR UPDATE USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can delete own learning" ON public.learning_plans FOR DELETE USING ((select auth.uid()) = user_id);
 
 
 -- ============================================================
@@ -118,9 +118,9 @@ CREATE TABLE public.user_profiles (
 
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own profile" ON public.user_profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can insert own profile" ON public.user_profiles FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can view own profile" ON public.user_profiles FOR SELECT USING ((select auth.uid()) = id);
+CREATE POLICY "Users can insert own profile" ON public.user_profiles FOR INSERT WITH CHECK ((select auth.uid()) = id);
+CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING ((select auth.uid()) = id);
 
 
 -- ============================================================
