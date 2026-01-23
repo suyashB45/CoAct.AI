@@ -68,8 +68,10 @@ const Signup: React.FC = () => {
                 navigate('/login');
             }
         } catch (err: any) {
-            console.error(err);
-            toast.error(err.message || "Signup failed");
+            console.error('Signup error:', err);
+            const errorMessage = err?.message || err?.error_description || err?.error ||
+                (typeof err === 'string' ? err : "Signup failed. Please try again.");
+            toast.error(errorMessage);
         } finally {
             setLoading(false);
         }
