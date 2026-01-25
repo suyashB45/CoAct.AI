@@ -11,7 +11,7 @@
 COACT.AI operates as a **Tri-Layer System** that manages the transition from live dialogue to structured coaching intelligence.
 
 ### A. The Interaction Layer (Roleplay)
-- **Persona Engine:** Utilizes LLMs (GPT-4.1-Mini) with strictly defined personas to maintain realistic human behavior (hesitation, defensiveness, or excitement).
+- **Persona Engine:** Utilizes LLMs (GPT-4.1-Mini) with strictly defined personas to mhttps://coact-ai.comhavior (hesitation, defensiveness, or excitement).
 - **Context Manager:** Injects scenario-specific data (e.g., store sales targets, customer budget) into the prompt window.
 
 ### B. The Intelligence Layer (The Orchestrator)
