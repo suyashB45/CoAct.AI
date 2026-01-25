@@ -84,7 +84,7 @@ docker compose run --rm --entrypoint "\
     --agree-tos \
     --no-eff-email \
     --force-renewal \
-    -d ${domains[0]}" certbot
+    -d ${domains[0]} -d ${domains[1]}" certbot
 
 # Check if certificate was obtained
 if [ -f "$data_path/conf/live/$domains/fullchain.pem" ]; then
