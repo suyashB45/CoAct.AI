@@ -3,7 +3,7 @@
 # init-letsencrypt.sh
 # Run this script on your Azure VM to obtain SSL certificates
 
-domains=(coactai.centralindia.cloudapp.azure.com)
+domains=(coact-ai.com www.coact-ai.com)
 email="coactai@outlook.com"  # CHANGE THIS to your email
 staging=0  # Set to 1 for testing (avoids rate limits)
 

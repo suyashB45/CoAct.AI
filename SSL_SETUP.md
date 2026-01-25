@@ -23,7 +23,7 @@ docker compose up -d
 docker ps
 
 # Test HTTPS
-curl -I https://coactai.centralindia.cloudapp.azure.com
+curl -I https://coact-ai.com
 ```
 
 ## Testing Without SSL (Local Development)
