@@ -12,28 +12,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     const location = useLocation();
 
     useEffect(() => {
-        // Check current session
+        let mounted = true;
+
         const checkAuth = async () => {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
-                setIsAuthenticated(!!session);
+                if (mounted) {
+                    setIsAuthenticated(!!session);
+                    // Only set loading to false if we have a session, otherwise wait for auth state change
+                    // or set it after a short timeout? 
+                    // actually, getSession is the source of truth for "restoring" persistence.
+                    // If it returns null, we probably aren't logged in.
+                    setLoading(false);
+                }
             } catch (error) {
                 console.error('Auth check failed:', error);
-                setIsAuthenticated(false);
-            } finally {
-                setLoading(false);
+                if (mounted) {
+                    setIsAuthenticated(false);
+                    setLoading(false);
+                }
             }
         };
 
         checkAuth();
 
-        // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setIsAuthenticated(!!session);
-            setLoading(false);
+            if (mounted) {
+                setIsAuthenticated(!!session);
+                setLoading(false);
+            }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     if (loading) {
