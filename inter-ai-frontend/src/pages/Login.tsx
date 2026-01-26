@@ -136,12 +136,7 @@ const Login: React.FC = () => {
                 </form>
 
                 <div className="mt-6 text-center">
-                    <p className="text-gray-400 text-sm">
-                        Don't have an account?{' '}
-                        <Link to="/signup" className="text-purple-400 hover:text-purple-300 font-medium hover:underline transition-all">
-                            Create an account
-                        </Link>
-                    </p>
+                    {/* Signup link removed for B2B */}
                 </div>
             </motion.div>
         </div>

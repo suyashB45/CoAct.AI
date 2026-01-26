@@ -24,12 +24,18 @@ interface GenericReportData {
     meta: BaseMeta
     type?: string
     transcript?: { role: "user" | "assistant", content: string }[]
+    user_name?: string
+    role?: string
+    ai_role?: string
+    scenario?: string
+    detailed_analysis?: string
+    dynamic_questions?: string[]
     [key: string]: any // Flexible for scenario fields
 }
 
 // Scenario 1: Coaching
 interface CoachingReportData extends GenericReportData {
-    scorecard: { dimension: string; score: string; description: string }[]
+    scorecard: { dimension: string; score: string; description: string; quote?: string; suggestion?: string; alternative_questions?: string[] }[]
     behavioral_signals: {
         manager_tone: string
         staff_defensiveness: string
@@ -48,7 +54,7 @@ interface CoachingReportData extends GenericReportData {
 
 // Scenario 2: Sales
 interface SalesReportData extends GenericReportData {
-    scorecard: { dimension: string; score: string; description: string }[]
+    scorecard: { dimension: string; score: string; description: string; quote?: string; suggestion?: string; alternative_questions?: string[] }[]
     simulation_analysis: {
         objections_raised: string
         objection_escalation: string
@@ -211,41 +217,191 @@ export default function Report() {
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col md:flex-row gap-8 justify-between items-start"
+                    className="flex flex-col md:flex-row gap-8 justify-between items-start relative"
                 >
-                    <div className="space-y-4 max-w-3xl">
-                        <div className="flex flex-wrap items-center gap-4">
-                            <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border backdrop-blur-md ${isSuccess ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
-                                {data.meta.outcome_status}
+                    <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-blue-500/20 rounded-full blur-[100px] -z-10 pointer-events-none" />
+
+                    <div className="space-y-6 max-w-3xl">
+                        <div className="flex flex-col gap-4">
+                            <div>
+                                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border backdrop-blur-md ${isSuccess ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                    {data.meta.outcome_status}
+                                </span>
                             </div>
-                            <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 tracking-tight">
-                                {(data.meta.scenario_id || "REPORT").toUpperCase()}
+                            <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-[0.9]">
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-500">
+                                    {(data.meta.scenario_id || "REPORT").toUpperCase()}
+                                </span>
                             </h1>
                         </div>
-                        <p className="text-slate-400 text-lg leading-relaxed border-l-2 border-slate-700 pl-6">
+
+                        {/* Character Branding */}
+                        <div className="flex items-center gap-5 mt-4 p-4 rounded-2xl bg-white/5 border border-white/5 backdrop-blur-sm w-fit">
+                            <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-white/10 ring-4 ring-blue-500/10 shadow-lg">
+                                <img
+                                    src={data.ai_character === 'sarah'
+                                        ? "/sarah.png"
+                                        : "/alex.png"
+                                    }
+                                    alt={data.ai_character || 'Coach'}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Analysis by</div>
+                                <div className="text-xl font-bold text-white tracking-tight">
+                                    Coach {data.ai_character ? (data.ai_character.charAt(0).toUpperCase() + data.ai_character.slice(1)) : 'Alex'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <p className="text-slate-300 text-lg leading-relaxed border-l-4 border-blue-500/50 pl-6 max-w-2xl font-medium">
                             {data.meta.summary}
                         </p>
                     </div>
 
-                    <div className="flex flex-col items-end gap-4 min-w-[200px]">
-                        {type !== 'learning' && type !== 'reflection' && (
+                    <div className="flex flex-col items-end gap-6 min-w-[240px]">
+                        {/* User Name Display */}
+                        {data.user_name && (
                             <div className="text-right">
-                                <div className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">Overall Grade</div>
-                                <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-indigo-500 leading-none">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Prepared for</div>
+                                <div className="text-2xl font-serif text-slate-200 italic border-b border-white/10 pb-1 px-4">{data.user_name}</div>
+                            </div>
+                        )}
+
+                        {/* Show Grade ONLY if not learning/reflection (regardless of character) */}
+                        {type !== 'learning' && type !== 'reflection' && (
+                            <div className="text-right relative group">
+                                <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                                <div className="text-xs font-bold text-blue-400 uppercase tracking-[0.2em] mb-2 text-right">Overall Score</div>
+                                <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white via-blue-200 to-blue-500 leading-none tracking-tighter drop-shadow-2xl">
                                     {data.meta.overall_grade}
                                 </div>
                             </div>
                         )}
-                        <Button onClick={handleDownload} variant="outline" className="gap-2 border-white/10 hover:bg-white/5 hover:text-white transition-all w-full">
-                            <Download className="w-4 h-4" /> Export Assessment PDF
+                        <Button onClick={handleDownload} variant="outline" className="gap-2 border-white/10 hover:bg-white/10 hover:text-white transition-all w-full h-12 text-sm uppercase tracking-wider font-bold">
+                            <Download className="w-4 h-4" /> Export Assessment
                         </Button>
                     </div>
                 </motion.div>
+
+                {/* SCENARIO CONTEXT */}
+                {(data.role || data.ai_role || data.scenario) && (
+                    <motion.div variants={itemVars} initial="hidden" animate="show">
+                        <GlassCard className="border-l-4 border-l-slate-500">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="p-3 rounded-xl bg-slate-500/10 ring-1 ring-white/5">
+                                    <MessageSquare className="w-6 h-6 text-slate-400" />
+                                </div>
+                                <h2 className="text-xl font-bold text-white tracking-wide uppercase">Scenario Context</h2>
+                            </div>
+
+                            <div className="grid md:grid-cols-3 gap-6">
+                                <div className="space-y-4 md:col-span-1">
+                                    <div>
+                                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Your Role</div>
+                                        <div className="text-lg text-white font-medium">{data.role}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Partner Role</div>
+                                        <div className="text-lg text-blue-300 font-medium">{data.ai_role}</div>
+                                    </div>
+                                </div>
+                                <div className="md:col-span-2 bg-slate-950/30 p-5 rounded-xl border border-white/5">
+                                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">Situation</div>
+                                    <p className="text-slate-300 leading-relaxed italic">"{data.scenario}"</p>
+                                </div>
+                            </div>
+                        </GlassCard>
+                    </motion.div>
+                )}
+
+                {/* DETAILED ANALYSIS */}
+                {data.detailed_analysis && (
+                    <motion.div variants={itemVars} initial="hidden" animate="show">
+                        <GlassCard className="border-l-4 border-l-blue-500">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="p-3 rounded-xl bg-blue-500/10 ring-1 ring-white/5">
+                                    <BookOpen className="w-6 h-6 text-blue-400" />
+                                </div>
+                                <h2 className="text-xl font-bold text-white tracking-wide uppercase">Detailed Analysis</h2>
+                            </div>
+                            <div className="bg-slate-950/30 p-6 rounded-xl border border-white/5">
+                                <p className="text-slate-200 leading-relaxed text-lg whitespace-pre-wrap">{data.detailed_analysis}</p>
+                            </div>
+                        </GlassCard>
+                    </motion.div>
+                )}
+
+                {/* DYNAMIC QUESTIONS */}
+                {data.dynamic_questions && data.dynamic_questions.length > 0 && (
+                    <motion.div variants={itemVars} initial="hidden" animate="show">
+                        <GlassCard className="border-l-4 border-l-indigo-500">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="p-3 rounded-xl bg-indigo-500/10 ring-1 ring-white/5">
+                                    <MessageSquare className="w-6 h-6 text-indigo-400" />
+                                </div>
+                                <h2 className="text-xl font-bold text-white tracking-wide uppercase">Deep-Dive Questions</h2>
+                            </div>
+                            <div className="grid gap-4">
+                                {data.dynamic_questions.map((q, i) => (
+                                    <div key={i} className="flex gap-4 p-5 bg-slate-950/30 rounded-xl border border-white/5 hover:border-indigo-500/30 transition-colors group">
+                                        <div className="h-8 w-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold shrink-0">?</div>
+                                        <p className="text-slate-200 text-lg font-medium leading-relaxed italic group-hover:text-white transition-colors">"{q}"</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </GlassCard>
+                    </motion.div>
+                )}
 
                 {/* CONTENT */}
                 <motion.div variants={containerVars} initial="hidden" animate="show">
                     {renderContent()}
                 </motion.div>
+
+                {/* SCORING METHODOLOGY */}
+                {type !== 'learning' && type !== 'reflection' && (
+                    <motion.div variants={itemVars} initial="hidden" animate="show">
+                        <GlassCard className="bg-slate-900/60">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="h-1 w-6 bg-slate-600 rounded-full"></div>
+                                <h2 className="text-xs font-bold text-slate-500 tracking-[0.2em] uppercase">Scoring Methodology</h2>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex gap-4">
+                                    <div className="text-emerald-400 font-bold text-lg whitespace-nowrap">9 - 10</div>
+                                    <div>
+                                        <div className="text-white font-bold text-sm mb-1">Expert</div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">Exceptional application of skills. Creates deep psychological safety and handles conflict with mastery.</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 rounded-xl bg-emerald-900/10 border border-emerald-500/10 flex gap-4">
+                                    <div className="text-emerald-300 font-bold text-lg whitespace-nowrap">7 - 8</div>
+                                    <div>
+                                        <div className="text-white font-bold text-sm mb-1">Proficient</div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">Strong performance. Meets objectives effectively with good empathy and strategy.</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex gap-4">
+                                    <div className="text-amber-400 font-bold text-lg whitespace-nowrap">4 - 6</div>
+                                    <div>
+                                        <div className="text-white font-bold text-sm mb-1">Competent</div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">Functional performance. Achieves basic goals but may be robotic or miss subtle cues.</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/10 flex gap-4">
+                                    <div className="text-rose-400 font-bold text-lg whitespace-nowrap">1 - 3</div>
+                                    <div>
+                                        <div className="text-white font-bold text-sm mb-1">Needs Ops</div>
+                                        <p className="text-xs text-slate-400 leading-relaxed">Struggles with core skills. May be defensive or dismissive. Immediate practice required.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </GlassCard>
+                    </motion.div>
+                )}
 
                 {/* TRANSCRIPT */}
                 {data.transcript && (
@@ -289,10 +445,96 @@ export default function Report() {
 
 // --- VIEW COMPONENTS & UTILS ---
 
+const ScoreItem = ({ label, score, desc, quote, suggestion, alternative_questions }: any) => {
+    const numScore = parseFloat(score?.split('/')[0] || 0)
+    const color = numScore >= 8 ? 'emerald' : numScore >= 5 ? 'amber' : 'rose'
+
+    return (
+        <div className={`group relative overflow-hidden rounded-2xl bg-slate-900/40 border border-white/5 hover:border-${color}-500/30 transition-all duration-500`}>
+            <div className={`absolute top-0 right-0 p-20 rounded-full blur-3xl opacity-0 group-hover:opacity-10 bg-${color}-500 transition-opacity duration-500 pointer-events-none`} />
+
+            <div className="relative z-10 p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <h4 className="text-xl font-bold text-white tracking-tight">{label}</h4>
+                    <div className={`px-3 py-1 rounded-full text-xs font-black bg-${color}-500/10 text-${color}-400 border border-${color}-500/20`}>
+                        {score}
+                    </div>
+                </div>
+
+                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mb-6">
+                    <motion.div
+                        initial={{ width: 0 }}
+                        whileInView={{ width: `${numScore * 10}%` }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className={`h-full bg-${color}-500 shadow-[0_0_10px_rgba(var(--${color}-500),0.5)]`}
+                    />
+                </div>
+
+                <div className="space-y-4">
+                    <p className="text-slate-300 leading-relaxed font-medium">{desc}</p>
+
+                    {quote && (
+                        <div className="bg-black/20 rounded-xl p-4 border border-white/5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="w-3 h-3 text-slate-500" />
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Evidence</span>
+                            </div>
+                            <p className="text-sm text-slate-400 italic">"{quote}"</p>
+                        </div>
+                    )}
+
+                    {(suggestion || (alternative_questions && alternative_questions.length > 0)) && (
+                        <div className={`rounded-xl p-4 border border-${color}-500/10 bg-${color}-500/5`}>
+                            {suggestion && (
+                                <div className="mb-3 last:mb-0">
+                                    <div className={`text-xs font-bold text-${color}-400 uppercase tracking-widest mb-1 flex items-center gap-2`}>
+                                        <Zap className="w-3 h-3" />
+                                        Suggestion
+                                    </div>
+                                    <p className={`text-sm text-${color}-200/80`}>{suggestion}</p>
+                                </div>
+                            )}
+
+                            {alternative_questions && alternative_questions.length > 0 && (
+                                <div>
+                                    <div className={`text-xs font-bold text-${color}-400 uppercase tracking-widest mb-2 flex items-center gap-2`}>
+                                        <Target className="w-3 h-3" />
+                                        Try Asking
+                                    </div>
+                                    <div className="space-y-3">
+                                        {alternative_questions.map((q: any, i: number) => {
+                                            const questionText = typeof q === 'string' ? q : q.question
+                                            const rationale = typeof q === 'string' ? null : q.rationale
+
+                                            return (
+                                                <div key={i} className={`flex flex-col gap-1 text-sm text-${color}-200/80`}>
+                                                    <div className="flex items-start gap-2 italic">
+                                                        <ArrowRight className="w-3 h-3 mt-1 flex-shrink-0 opacity-50" />
+                                                        <span>"{questionText}"</span>
+                                                    </div>
+                                                    {rationale && (
+                                                        <div className={`text-xs ml-5 px-2 py-1 bg-${color}-500/10 rounded border border-${color}-500/10 text-${color}-100/70`}>
+                                                            <span className="font-bold uppercase tracking-wider text-[10px] opacity-70">Reasoning:</span> {rationale}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 const GlassCard = ({ children, className = "" }: any) => (
     <motion.div
         variants={itemVars}
-        className={`bg-slate-900/40 backdrop-blur-md rounded-2xl border border-white/5 p-6 hover:border-white/10 transition-colors ${className}`}
+        className={`bg-slate-900/60 backdrop-blur-xl rounded-3xl border border-white/10 p-8 shadow-2xl relative overflow-hidden ${className}`}
     >
         {children}
     </motion.div>
@@ -318,23 +560,6 @@ const ProgressBar = ({ value, colorClass = "bg-blue-500" }: { value: number, col
     </div>
 )
 
-const ScoreItem = ({ label, score, desc }: any) => {
-    const numScore = parseFloat(score?.split('/')[0] || 0)
-    const color = numScore >= 8 ? 'bg-emerald-500' : numScore >= 5 ? 'bg-amber-500' : 'bg-rose-500'
-    const endColor = numScore >= 8 ? 'text-emerald-400' : numScore >= 5 ? 'text-amber-400' : 'text-rose-400'
-
-    return (
-        <div className="group">
-            <div className="flex justify-between items-end mb-2">
-                <span className="font-bold text-slate-200 text-lg group-hover:text-white transition-colors">{label}</span>
-                <span className={`font-mono font-bold text-xl ${endColor}`}>{score}</span>
-            </div>
-            <ProgressBar value={numScore * 10} colorClass={color} />
-            <p className="text-sm text-slate-400 mt-3 leading-relaxed">{desc}</p>
-        </div>
-    )
-}
-
 const KeyValueRow = ({ label, value, highlight = false }: any) => (
     <div className="flex justify-between items-center py-3 border-b border-white/5 last:border-0 hover:bg-white/5 px-2 rounded-lg transition-colors">
         <span className="text-slate-400 text-sm font-medium uppercase tracking-wide">{label}</span>
@@ -349,7 +574,17 @@ const CoachingView = ({ data }: { data: CoachingReportData }) => (
             <SectionHeader icon={Briefcase} title="Coaching Scorecard" />
             <div className="grid lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
-                    {data.scorecard?.map((s, i) => <ScoreItem key={i} label={s.dimension} score={s.score} desc={s.description} />)}
+                    {data.scorecard?.map((s, i) => (
+                        <ScoreItem
+                            key={i}
+                            label={s.dimension}
+                            score={s.score}
+                            desc={s.description}
+                            quote={s.quote}
+                            suggestion={s.suggestion}
+                            alternative_questions={s.alternative_questions}
+                        />
+                    ))}
                 </div>
                 <div className="space-y-6 bg-slate-950/30 p-6 rounded-xl border border-white/5">
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Behavioral Analysis</h3>
@@ -423,7 +658,17 @@ const SalesView = ({ data }: { data: SalesReportData }) => (
             <SectionHeader icon={Target} title="Sales Performance" colorClass="text-emerald-400" bgClass="bg-emerald-500/10" />
             <div className="grid lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
-                    {data.scorecard?.map((s, i) => <ScoreItem key={i} label={s.dimension} score={s.score} desc={s.description} />)}
+                    {data.scorecard?.map((s, i) => (
+                        <ScoreItem
+                            key={i}
+                            label={s.dimension}
+                            score={s.score}
+                            desc={s.description}
+                            quote={s.quote}
+                            suggestion={s.suggestion}
+                            alternative_questions={s.alternative_questions}
+                        />
+                    ))}
                 </div>
                 <div className="space-y-6">
                     <div className="bg-slate-950/30 p-6 rounded-xl border border-white/5 space-y-4">

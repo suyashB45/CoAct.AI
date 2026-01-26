@@ -20,6 +20,7 @@ interface SessionData {
     createdAt: string
     transcript: TranscriptMessage[]
     sessionId?: string
+    ai_character?: string
 }
 
 interface ConversationState {
@@ -80,83 +81,61 @@ export default function Conversation() {
     const [lastAudioUrl, setLastAudioUrl] = useState<string | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
 
-    // Cached voice for consistent experience
-    const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null)
+    // Audio playback for AI response
+    const aiAudioRef = useRef<HTMLAudioElement | null>(null)
 
-    const getConsistentVoice = () => {
-        if (selectedVoiceRef.current) return selectedVoiceRef.current
+    const speakText = async (text: string, forcedCharacter?: string) => {
+        try {
+            // Determine voice based on character
+            // Use forcedCharacter if provided (fixes race condition on mount)
+            const character = forcedCharacter || state.sessionData?.ai_character || 'alex'
+            const voice = character === 'alex' ? 'onyx' : 'nova'
 
-        const voices = window.speechSynthesis.getVoices()
+            setIsAiSpeaking(true)
 
-        // Prefer male voices for consistency (prioritized order)
-        const maleVoicePreferences = [
-            'Google UK English Male',
-            'Microsoft David',
-            'Microsoft Guy',
-            'Daniel',
-            'Alex',
-            'Google US English',
-            'Microsoft Mark'
-        ]
+            const response = await fetch(getApiUrl('/api/speak'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice })
+            })
 
-        let voice = null
-        for (const pref of maleVoicePreferences) {
-            voice = voices.find(v => v.name.includes(pref))
-            if (voice) break
+            if (!response.ok) throw new Error("TTS failed")
+
+            const blob = await response.blob()
+            const url = URL.createObjectURL(blob)
+
+            if (aiAudioRef.current) {
+                aiAudioRef.current.pause()
+                aiAudioRef.current = null
+            }
+
+            const audio = new Audio(url)
+            aiAudioRef.current = audio
+
+            audio.onended = () => {
+                setIsAiSpeaking(false)
+                URL.revokeObjectURL(url)
+            }
+
+            audio.onerror = () => {
+                setIsAiSpeaking(false)
+                console.error("Audio playback error")
+            }
+
+            await audio.play()
+
+        } catch (error) {
+            console.error("TTS Error:", error)
+            setIsAiSpeaking(false)
         }
-
-        // Fallback to any English voice that sounds male (avoid 'Zira', 'Female', 'Woman')
-        if (!voice) {
-            voice = voices.find(v =>
-                v.lang.startsWith('en') &&
-                !v.name.toLowerCase().includes('female') &&
-                !v.name.toLowerCase().includes('zira') &&
-                !v.name.toLowerCase().includes('woman') &&
-                !v.name.toLowerCase().includes('samantha')
-            )
-        }
-
-        // Ultimate fallback - any English voice
-        if (!voice) {
-            voice = voices.find(v => v.lang.startsWith('en'))
-        }
-
-        selectedVoiceRef.current = voice || null
-        return selectedVoiceRef.current
     }
 
-    const speakText = (text: string) => {
-        if (!('speechSynthesis' in window)) return
-
-        window.speechSynthesis.cancel()
-
-        const utterance = new SpeechSynthesisUtterance(text)
-        utterance.rate = 1.0
-        utterance.pitch = 1.0
-
-        // Use consistent voice
-        const voice = getConsistentVoice()
-        if (voice) utterance.voice = voice
-
-        utterance.onstart = () => setIsAiSpeaking(true)
-        utterance.onend = () => setIsAiSpeaking(false)
-        utterance.onerror = () => setIsAiSpeaking(false)
-
-        window.speechSynthesis.speak(utterance)
-    }
-
-    // Load voices when component mounts
+    // Stop audio on unmount
     useEffect(() => {
-        const loadVoices = () => {
-            window.speechSynthesis.getVoices()
-            getConsistentVoice()
-        }
-
-        loadVoices()
-        window.speechSynthesis.onvoiceschanged = loadVoices
-
         return () => {
-            window.speechSynthesis.onvoiceschanged = null
+            if (aiAudioRef.current) {
+                aiAudioRef.current.pause()
+            }
         }
     }, [])
 
@@ -184,7 +163,8 @@ export default function Conversation() {
             const latestMsg = initialTranscript[initialTranscript.length - 1]
             if (latestMsg.role === 'assistant' && initialTranscript.length === 1) {
                 const timer = setTimeout(() => {
-                    speakText(latestMsg.content)
+                    // Pass current sessionData character directly to avoid stale state issue
+                    speakText(latestMsg.content, sessionData.ai_character)
                 }, 500)
                 return () => clearTimeout(timer)
             }
@@ -364,8 +344,8 @@ export default function Conversation() {
     }
 
     const handleEndConversation = async () => {
-        if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel()
+        if (aiAudioRef.current) {
+            aiAudioRef.current.pause()
         }
 
         try {

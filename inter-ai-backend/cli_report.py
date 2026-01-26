@@ -150,47 +150,71 @@ def detect_scenario_type(scenario: str, ai_role: str, role: str) -> str:
     ai_role_lower = ai_role.lower()
     role_lower = role.lower()
     
-    # Scenario 1: Coaching/Performance Management
-    coaching_keywords = ["coaching", "performance", "dropped", "missed targets", "energy", "engagement", "staff", "team member", "employee"]
-    
-    # Scenario 2: Sales/Negotiation
-    negotiation_keywords = ["customer", "price", "negotiate", "discount", "budget", "sales", "purchase", "buying", "competitor", "offer"]
-    
-    # Scenario 3: Reflection/Learning (with a coach)
-    reflection_keywords = ["coach", "reflection", "learning", "explain", "handled", "feedback", "development", "practice"]
-    
-    # Scenario 4: De-escalation
-    deescalation_keywords = ["angry", "upset", "complaint", "calm", "de-escalate", "tension", "conflict", "furious"]
-
     combined_text = f"{scenario_lower} {ai_role_lower} {role_lower}"
-    
-    # Check for reflection first
-    if "coach" in ai_role_lower or any(kw in combined_text for kw in reflection_keywords[:3]):
+
+    # 1. REFLECTION / MENTORSHIP (No Scorecard)
+    # Trigger if AI is strictly a "Coach" or "Mentor" (Role-based)
+    if "coach" in ai_role_lower or "mentor" in ai_role_lower:
         return "reflection"
     
-    # Check for de-escalation (S4 variant)
-    if any(kw in combined_text for kw in deescalation_keywords):
-        return "deescalation"
+    # Trigger if explicit "learning" or "reflection" keywords in text (Topic-based)
+    # Note: Avoid "coach" in text search to prevent matching "Manager coaching staff" (which should be Scored)
+    reflection_keywords = ["reflection", "learning plan", "development plan", "self-reflection"]
+    if any(kw in combined_text for kw in reflection_keywords):
+        return "reflection"
     
-    # Check for negotiation
+    # 2. NEGOTIATION / SALES (Scorecard)
+    negotiation_keywords = ["sales", "negotiat", "price", "discount", "buyer", "seller", "deal", "purchase"]
     if any(kw in combined_text for kw in negotiation_keywords):
         return "negotiation"
     
-    # Check for coaching
+    # 3. COACHING / LEADERSHIP (Scorecard)
+    # User is the one doing the coaching/managing
+    coaching_keywords = ["coaching", "performance", "feedback", "manager", "supervisor", "staff", "employee"]
     if any(kw in combined_text for kw in coaching_keywords):
         return "coaching"
     
-    # Default to custom for anything else
+    # 4. DE-ESCALATION (Scorecard)
+    deescalation_keywords = ["angry", "upset", "complaint", "calm", "de-escalate"]
+    if any(kw in combined_text for kw in deescalation_keywords):
+        return "custom" # Currently maps to Custom but we can add specific later
+    
+    # Default
     return "custom"
 
 
-def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None):
+def detect_user_role_context(role: str, ai_role: str) -> str:
+    """Detect the specific sub-role of the user (e.g., Manager vs Staff, Seller vs Buyer)."""
+    role_lower = role.lower()
+    
+    # Coaching Context
+    if any(k in role_lower for k in ["manager", "supervisor", "lead", "coach"]):
+        return "manager"
+    if any(k in role_lower for k in ["staff", "associate", "employee", "report", "subordinate"]):
+        return "staff"
+        
+    # Sales/Negotiation Context
+    if any(k in role_lower for k in ["sales", "account executive", "rep", "seller"]):
+        return "seller"
+    if any(k in role_lower for k in ["customer", "buyer", "client", "prospect"]):
+        return "buyer"
+        
+    return "unknown"
+
+def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None, mode="coaching", scenario_type=None, ai_character="alex"):
     """
     Generate report data using SCENARIO-SPECIFIC structures.
     """
     # Auto-detect scenario type if not provided
     if not scenario_type:
         scenario_type = detect_scenario_type(scenario, ai_role, role)
+    
+    # Detect granular user role
+    user_context = detect_user_role_context(role, ai_role)
+    print(f"🕵️ User Context Detected: {user_context} (Scenario: {scenario_type})")
+
+    # CHARACTER SCHEMA OVERRIDE REMOVED - Relying on scenario_type detection
+    # if ai_character == 'sarah': ...
     
     # Extract only user messages for focused analysis
     user_msgs = [t for t in transcript if t['role'] == 'user']
@@ -209,92 +233,180 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         meta["summary"] = "Session started but no interaction recorded."
         return { "meta": meta, "type": scenario_type }
 
+    # Determine Report Mode based on User Role Context
+    # RULE: If User is PERFORMER -> EVALUATION (Scored)
+    # RULE: If User is EVALUATOR -> MENTORSHIP (Unscored)
+    
+    is_user_performer = False
+    if scenario_type == "coaching":
+        # User is Staff (Performer) vs Manager (Evaluator)
+        if user_context == "staff": is_user_performer = True
+    elif scenario_type == "negotiation":
+        # User is Seller (Performer) vs Buyer (Evaluator)
+        if user_context == "seller": is_user_performer = True
+    
     # -------------------------------------------------------------
-    # BUILD SPECIFIC PROMPTS BASED ON SCENARIO TYPE
+    # BUILD SPECIFIC PROMPTS BASED ON SCENARIO TYPE & ROLE
     # -------------------------------------------------------------
     
     unified_instruction = ""
     
     if scenario_type == "coaching":
-        unified_instruction = """
-### SCENARIO 1: MANAGER-STAFF COACHING
-**GOAL**: Generate a Coaching Effectiveness Report.
+        if is_user_performer: # User is STAFF
+            unified_instruction = """
+### SCENARIO: COACHABILITY ASSESSMENT (USER IS STAFF)
+**GOAL**: Evaluate how well the user RECEIVES coaching.
+**MODE**: EVALUATION (Score Coachability).
 **OUTPUT JSON STRUCTURE**:
 {
   "meta": { "scenario_id": "coaching", "outcome_status": "Success/Partial/Failure", "overall_grade": "X/10", "summary": "..." },
   "type": "coaching",
+  "detailed_analysis": "2-3 paragraphs analysis of the user's professionalism, ownership, and attitude.",
   "scorecard": [
-    { "dimension": "Listening & Empathy", "score": "X/10", "description": "..." },
-    { "dimension": "Questioning Quality", "score": "X/10", "description": "..." },
-    { "dimension": "Psychological Safety", "score": "X/10", "description": "..." },
-    { "dimension": "Coaching vs Telling", "score": "X/10", "description": "..." },
-    { "dimension": "Accountability & Closure", "score": "X/10", "description": "..." }
+    { 
+      "dimension": "Professionalism", 
+      "score": "X/10", 
+      "description": "A detailed paragraph explaining exactly why this score was given, explicitly mentioning the specific behavior or mistake that led to this score.",
+      "quote": "The exact verbatim line from the transcript that helps justify this score.",
+      "suggestion": "Specific, actionable advice on what they should have done differently.",
+      "alternative_questions": [{"question": "Better phrasing example", "rationale": "Why this phrasing is more effective"}]
+    },
+    { 
+      "dimension": "Ownership", 
+      "score": "X/10", 
+      "description": "A detailed paragraph analyzing whether they took true ownership or deflected blame, citing specific examples from their response.",
+      "quote": "The exact line showing their level of ownership.",
+      "suggestion": "How they could have taken stronger ownership.",
+      "alternative_questions": [{"question": "I could have done X...", "rationale": "Takes direct responsibility"}]
+    },
+    { 
+      "dimension": "Active Listening", 
+      "score": "X/10", 
+      "description": "A detailed paragraph evaluating their ability to validate feelings and listen, mentioning specific cues they missed or caught.",
+      "quote": "The specific line where they demonstrated or failed at listening.",
+      "suggestion": "The specific validation technique they should practice.",
+      "alternative_questions": [{"question": "What I hear you saying is...", "rationale": "Demonstrates validation before solution"}]
+    },
+    { 
+      "dimension": "Solution Focus", 
+      "score": "X/10", 
+      "description": "A detailed paragraph assessing if their solution was collaborative and addressed the root cause, or if it was imposed/dismissive.",
+      "quote": "The line where they proposed the solution.",
+      "suggestion": "A more collaborative or effective solution approach.",
+      "alternative_questions": [{"question": "What if we tried X?", "rationale": "Invites collaboration"}]
+    }
   ],
-  "behavioral_signals": {
-    "manager_tone": "Supportive / Neutral / Directive",
-    "staff_defensiveness": "High -> Low",
-    "staff_openness": "Improved / Flat",
-    "emotional_safety": "Present / Partial"
-  },
-  "strengths": ["Strength 1...", "Strength 2..."],
-  "missed_opportunities": ["Missed opp 1...", "Missed opp 2..."],
-  "coaching_impact": {
-    "self_awareness_gained": "...",
-    "ownership_level": "...",
-    "change_likelihood": "..."
-  },
-  "actionable_tips": ["Tip 1...", "Tip 2...", "Tip 3..."]
+  "strengths": ["..."],
+  "missed_opportunities": ["..."],
+  "actionable_tips": ["Tip 1...", "Tip 2..."]
 }
 """
-    elif scenario_type == "negotiation": # Sales
-        unified_instruction = """
-### SCENARIO 2: SALES & NEGOTIATION
-**GOAL**: Generate a Sales Performance Report.
-**OUTPUT JSON STRUCTURE**:
-{
-  "meta": { "scenario_id": "sales", "outcome_status": "Closed/Negotiating/Lost", "overall_grade": "X/10", "summary": "..." },
-  "type": "sales",
-  "scorecard": [
-    { "dimension": "Rapport Building", "score": "X/10", "description": "..." },
-    { "dimension": "Needs Discovery", "score": "X/10", "description": "..." },
-    { "dimension": "Value Articulation", "score": "X/10", "description": "..." },
-    { "dimension": "Objection Handling", "score": "X/10", "description": "..." },
-    { "dimension": "Negotiation Strategy", "score": "X/10", "description": "..." },
-    { "dimension": "Closing Readiness", "score": "X/10", "description": "..." }
-  ],
-  "simulation_analysis": {
-    "objections_raised": "Price / Comparison / Trust",
-    "objection_escalation": "Increased / Reduced",
-    "sentiment_trend": "Defensive -> Positve"
-  },
-  "what_worked": ["..."],
-  "what_limited_effectiveness": ["..."],
-  "revenue_impact": {
-    "price_risk": "...",
-    "missed_upsell": "...",
-    "trust_impact": "..."
-  },
-  "sales_recommendations": ["Rec 1...", "Rec 2..."]
-}
-"""
-    elif scenario_type == "reflection" or scenario_type == "learning":
-        unified_instruction = """
-### SCENARIO 3: PERSONAL LEARNING PLAN (NO SCORES)
-**GOAL**: Generate a Developmental Learning Plan.
+        else: # User is MANAGER (Evaluator -> Mentorship)
+            unified_instruction = """
+### SCENARIO: LEADERSHIP MENTORSHIP (USER IS MANAGER)
+**GOAL**: specific guidance on improving the user's coaching style.
+**MODE**: MENTORSHIP (No Scorecard).
 **OUTPUT JSON STRUCTURE**:
 {
   "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
   "type": "learning",
-  "context_summary": {
-    "situation": "...",
-    "challenge_area": "..."
-  },
+  "detailed_analysis": "2-3 paragraph professional analysis of the user's coaching style, highlighting key moments of empathy or friction.",
+  "key_insights": ["Insight 1...", "Insight 2..."],
+  "reflective_questions": ["Question 1...", "Question 2..."],
+  "growth_outcome": "Vision of the user as a better leader...",
+  "practice_plan": ["Try asking...", "Focus on..."]
+}
+"""
+            # Override semantic type for Report.tsx to render Learning View
+            scenario_type = "learning" 
+
+    elif scenario_type == "negotiation": 
+        if is_user_performer: # User is SELLER
+            unified_instruction = """
+### SCENARIO: SALES PERFORMANCE ASSESSMENT (USER IS SELLER)
+**GOAL**: Generate a Sales Performance Report.
+**MODE**: EVALUATION (Strict Grading).
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "sales", "outcome_status": "Closed/Negotiating/Lost", "overall_grade": "X/10", "summary": "..." },
+  "type": "sales",
+  "detailed_analysis": "Analysis of sales technique.",
+  "scorecard": [
+    { 
+      "dimension": "Rapport Building", 
+      "score": "X/10", 
+      "description": "A detailed paragraph interpreting whether their rapport attempt was authentic or forced, citing specific phrasing used.",
+      "quote": "The specific line used for rapport.",
+      "suggestion": "A more effective rapport-building approach.",
+      "alternative_questions": [{"question": "How has your week been?", "rationale": "Builds personal connection"}]
+    },
+    { 
+      "dimension": "Needs Discovery", 
+      "score": "X/10", 
+      "description": "A detailed paragraph evaluating the depth of their questioning and whether they uncovered the true need.",
+      "quote": "The specific question asked (or missed opportunity).",
+      "suggestion": "The critical question they should have asked.",
+      "alternative_questions": [{"question": "What is your top priority?", "rationale": "Focuses on strategic goals"}]
+    },
+    { 
+      "dimension": "Value Articulation", 
+      "score": "X/10", 
+      "description": "A detailed paragraph explaining if they successfully linked the product value to the user's specific pain points.",
+      "quote": "The line where they pitched the value.",
+      "suggestion": "How to make the value proposition sharper.",
+      "alternative_questions": [{"question": "This helps you save X...", "rationale": "Quantifies the benefit explicitly"}]
+    },
+    { 
+      "dimension": "Objection Handling", 
+      "score": "X/10", 
+      "description": "A detailed paragraph analyzing their emotional reaction and logical answer to the objection.",
+      "quote": "The specific response to the objection.",
+      "suggestion": "A better frame or technique for handling this objection.",
+      "alternative_questions": [{"question": "I understand your concern...", "rationale": "Validates before countering"}]
+    },
+    { 
+      "dimension": "Closing", 
+      "score": "X/10", 
+      "description": "A detailed paragraph assessing the timing, confidence, and clarity of their closing attempt.",
+      "quote": "The specific closing line used.",
+      "suggestion": "A more confident or appropriate closing technique.",
+      "alternative_questions": [{"question": "Are we ready to move forward?", "rationale": "Direct check for agreement"}]
+    }
+  ],
+  "sales_recommendations": ["Rec 1...", "Rec 2..."]
+}
+"""
+        else: # User is BUYER (Evaluator -> Mentorship)
+            unified_instruction = """
+### SCENARIO: BUYER STRATEGY MENTORSHIP (USER IS BUYER)
+**GOAL**: specific guidance on how to negotiate better deals as a buyer.
+**MODE**: MENTORSHIP (No Scorecard).
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
+  "type": "learning",
+  "detailed_analysis": "Analysis of the user's negotiation power and leverage.",
+  "key_insights": ["Insight 1...", "Insight 2..."],
+  "reflective_questions": ["Question 1...", "Question 2..."],
+  "growth_outcome": "Vision of the user as a stronger negotiator...",
+  "practice_plan": ["Be willing to walk away...", "Ask for concessions..."]
+}
+"""
+            # Override semantic type for Report.tsx to render Learning View
+            scenario_type = "learning"
+
+    elif scenario_type == "reflection" or scenario_type == "learning":
+        unified_instruction = """
+### SCENARIO: PERSONAL LEARNING PLAN
+**GOAL**: Generate a Developmental Learning Plan.
+**MODE**: MENTORSHIP (Supportive, Qualitative Only).
+**OUTPUT JSON STRUCTURE**:
+{
+  "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
+  "type": "learning",
+  "detailed_analysis": "Professional analysis of the conversation.",
   "key_insights": ["Pattern observed...", "Strength present..."],
   "reflective_questions": ["Question 1...", "Question 2..."],
-  "skill_focus_areas": ["Technique 1", "Technique 2"],
-  "behavioral_shifts": [
-    { "from": "Old behavior", "to": "New behavior" }
-  ],
   "practice_plan": ["Experiment 1...", "Micro-habit..."],
   "growth_outcome": "Vision of success..."
 }
@@ -305,18 +417,9 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 **GOAL**: Generate an Adaptive Feedback Report.
 **OUTPUT JSON STRUCTURE**:
 {
-  "meta": { "scenario_id": "custom", "outcome_status": "Success/Partial", "overall_grade": "X/10", "summary": "..." },
+  "meta": { "scenario_id": "custom", "outcome_status": "Success/Partial", "overall_grade": "N/A", "summary": "..." },
   "type": "custom",
-  "interaction_quality": {
-    "engagement": "High/Med/Low",
-    "tone": "...",
-    "talk_listen_ratio": "..."
-  },
-  "core_skills": [
-    { "skill": "Adaptive Skill 1", "rating": "High/Med/Low", "feedback": "..." },
-    { "skill": "Adaptive Skill 2", "rating": "...", "feedback": "..." },
-    { "skill": "Adaptive Skill 3", "rating": "...", "feedback": "..." }
-  ],
+  "detailed_analysis": "Analysis of performance.",
   "strengths_observed": ["..."],
   "development_opportunities": ["..."],
   "guidance": {
@@ -327,6 +430,27 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 }
 """
 
+    # ANALYST PERSONA (Layered on top of Scenario Logic)
+    # The 'Content' (what is measured) is determined by the Scenario (above).
+    # The 'Voice' (how it is written) is determined by the Character (below).
+    
+    analyst_persona = ""
+    if ai_character == "sarah":
+        analyst_persona = """
+    ### ANALYST STYLE: COACH SARAH (MENTOR)
+    - **Tone**: Warm, encouraging, high-EQ, "Sandwich Method" (Praise-Critique-Praise).
+    - **Focus**: Psychological safety, "growth mindset", and emotional intelligence.
+    - **Detail Level**: VERY HIGH. Write 4-5 paragraphs in `detailed_analysis`. Go deep into the "why" behind the user's choices.
+    - **Signature**: Use phrases like "I loved how you...", "Consider trying...", "A small tweak could be...".
+    """
+    else: # Default to Alex
+        analyst_persona = """
+    ### ANALYST STYLE: COACH ALEX (EVALUATOR)
+    - **Tone**: Professional, direct, analytical, "Bottom Line Up Front".
+    - **Focus**: Efficiency, clear outcomes, negotiation leverage, and rapid improvement.
+    - **Detail Level**: VERY HIGH. Write 4-5 paragraphs in `detailed_analysis`. Break down the interaction mechanism by mechanism.
+    - **Signature**: Use phrases like "The metrics show...", "You missed an opportunity to...", "To optimize, you must...".
+    """
 
     # Unified System Prompt
     system_prompt = (
@@ -334,10 +458,12 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         f"You are an expert Soft Skills Development Coach generating reports for 'COACT.AI'.\\n"
         f"Context: {scenario}\\n"
         f"User Role: {role} | AI Role: {ai_role}\\n"
+        f"{analyst_persona}\\n"
         f"{unified_instruction}\\n"
         f"### GENERAL RULES\\n"
-        "1. Be specific and citation-based.\\n"
-        "2. OUTPUT MUST BE VALID JSON ONLY.\\n"
+        "1. **EVIDENCE-BASED SCORING**: For every score in the 'scorecard', 'description' MUST cite specific behavior or quotes from the user.\\n"
+        "2. **JUSTIFICATION**: Do not just say 'Good job'. Explain 'You scored 8/10 because you asked X question at the start...'.\\n"
+        "3. OUTPUT MUST BE VALID JSON ONLY.\\n"
     )
 
     try:
@@ -429,6 +555,12 @@ class DashboardPDF(FPDF):
                 self.set_fill_color(int(r), int(g), int(b))
                 self.rect(x, y + i, w, 1, 'F')
 
+    def set_user_name(self, name):
+        self.user_name = sanitize_text(name)
+
+    def set_character(self, character):
+        self.ai_character = sanitize_text(character).capitalize()
+
     def header(self):
         if self.page_no() == 1:
             # Premium gradient header
@@ -438,16 +570,33 @@ class DashboardPDF(FPDF):
             self.set_font('Arial', 'B', 24)
             self.set_text_color(255, 255, 255)
             super().cell(0, 10, 'COACT.AI', 0, 0, 'L')
-            # Subtitle
+            # Subtitle - Dynamic based on Coach
             self.set_xy(10, 22)
             self.set_font('Arial', '', 11)
             self.set_text_color(147, 197, 253)
-            super().cell(0, 5, 'Coaching & Performance Development Report', 0, 0, 'L')
+            
+            coach_name = getattr(self, 'ai_character', 'Alex')
+            super().cell(0, 5, f'Performance Analysis by Coach {coach_name}', 0, 0, 'L')
+            
             # Date on right
-            self.set_xy(150, 10)
+            self.set_xy(140, 10)
             self.set_font('Arial', '', 9)
             self.set_text_color(200, 220, 255)
             super().cell(50, 5, dt.datetime.now().strftime('%B %d, %Y'), 0, 0, 'R')
+            
+            # User Name Display
+            if hasattr(self, 'user_name') and self.user_name:
+                self.set_xy(140, 16)
+                self.set_font('Arial', 'I', 9)
+                super().cell(50, 5, f"Prepared for: {self.user_name}", 0, 0, 'R')
+
+            # Avatar Image (Dynamic)
+            if hasattr(self, 'ai_character'):
+                char_name = self.ai_character.lower()
+                img_path = f"{char_name}.png"
+                if os.path.exists(img_path):
+                     self.image(img_path, x=188, y=8, w=15)
+
             self.ln(35)
         else:
             # Slim header for subsequent pages
@@ -457,15 +606,185 @@ class DashboardPDF(FPDF):
             self.set_font('Arial', 'B', 10)
             self.set_text_color(255, 255, 255)
             super().cell(100, 6, 'CoAct.AI Report', 0, 0, 'L')
+            
+            # Avatar Icon Scalling Small
+            if hasattr(self, 'ai_character'):
+                char_name = self.ai_character.lower()
+                img_path = f"{char_name}.png"
+                if os.path.exists(img_path):
+                    self.image(img_path, x=5, y=2, w=10)
+                    
             # Page indicator
             self.set_font('Arial', '', 9)
             self.set_text_color(180, 200, 255)
             super().cell(0, 6, f'Page {self.page_no()}', 0, 0, 'R')
             self.ln(18)
 
-    def check_space(self, h):
-        if self.get_y() + h > 270:
-            self.add_page()
+    def set_context(self, role, ai_role, scenario):
+        self.user_role = sanitize_text(role)
+        self.ai_role = sanitize_text(ai_role)
+        self.scenario_text = sanitize_text(scenario)
+
+    def draw_context_summary(self):
+        """Draw a summary of the scenario context and roles."""
+        if not hasattr(self, 'user_role'): return
+        
+        self.check_space(40)
+        self.ln(5)
+        
+        # Section Header
+        self.set_font('Arial', 'B', 10)
+        self.set_text_color(71, 85, 105) # Slate 600
+        self.cell(0, 6, "SCENARIO CONTEXT", 0, 1)
+        
+        # Grid Background
+        self.set_fill_color(248, 250, 252) # Slate 50
+        start_y = self.get_y()
+        self.rect(10, start_y, 190, 35, 'F')
+        
+        # Draw Roles
+        self.set_xy(15, start_y + 4)
+        self.set_font('Arial', 'B', 9)
+        self.set_text_color(*COLORS['primary'])
+        self.cell(20, 5, "Your Role:", 0, 0)
+        self.set_font('Arial', '', 9)
+        self.set_text_color(*COLORS['text_main'])
+        self.cell(60, 5, self.user_role, 0, 0)
+        
+        self.set_font('Arial', 'B', 9)
+        self.set_text_color(*COLORS['primary'])
+        self.cell(20, 5, "Partner:", 0, 0)
+        self.set_font('Arial', '', 9)
+        self.set_text_color(*COLORS['text_main'])
+        self.cell(60, 5, self.ai_role, 0, 1)
+        
+        # Draw Scenario Description
+        self.set_xy(15, start_y + 12)
+        self.set_font('Arial', 'B', 9)
+        self.set_text_color(*COLORS['primary'])
+        self.cell(0, 5, "Situation:", 0, 1)
+        
+        self.set_x(15)
+        self.set_font('Arial', '', 9)
+        self.set_text_color(*COLORS['text_light'])
+        # Truncate if too long to fit in box
+        text = self.scenario_text
+        if len(text) > 300: text = text[:297] + "..."
+        self.multi_cell(180, 5, text)
+        
+        # Move cursor past the box
+        self.set_y(start_y + 40)
+
+    def draw_scoring_methodology(self):
+        """Draw the scoring rubric/methodology section."""
+        self.check_space(50)
+        self.ln(5)
+        
+        self.draw_section_header("SCORING METHODOLOGY (THE 'WHY')", COLORS['secondary'])
+        
+        # Grid Background
+        self.set_fill_color(248, 250, 252)
+        start_y = self.get_y()
+        self.rect(10, start_y, 190, 35, 'F')
+        
+        # Scoring Levels
+        levels = [
+            ("9-10 (Expert)", "Exceptional application of skills. Creates deep psychological safety, handles conflict with mastery, and drives clear outcomes."),
+            ("7-8 (Proficient)", "Strong performance. Meets all core objectives effectively. Good empathy and strategy, with minor opportunities for refinement."),
+            ("4-6 (Competent)", "Functional performance. Achieves basic goals but may miss subtle cues, sound robotic, or struggle with difficult objections."),
+            ("1-3 (Needs Ops)", "Struggles with core skills. May be defensive, dismissive, or completely miss the objective. Immediate practice required.")
+        ]
+        
+        current_y = start_y + 4
+        
+        for grade, desc in levels:
+            self.set_xy(15, current_y)
+            self.set_font('Arial', 'B', 8)
+            
+            # Color coding for levels
+            if "9-10" in grade: self.set_text_color(*COLORS['success'])
+            elif "7-8" in grade: self.set_text_color(*COLORS['success']) # Lighter green ideally, but success works
+            elif "4-6" in grade: self.set_text_color(*COLORS['warning'])
+            else: self.set_text_color(*COLORS['danger'])
+            
+            self.cell(25, 6, grade, 0, 0)
+            
+            self.set_font('Arial', '', 8)
+            self.set_text_color(*COLORS['text_light'])
+            self.cell(3, 6, "|", 0, 0)
+            
+            self.set_text_color(*COLORS['text_main'])
+            self.multi_cell(150, 6, desc)
+            current_y += 7
+
+        self.set_y(start_y + 42)
+
+    def draw_detailed_analysis(self, analysis_text):
+        """Draw the detailed analysis section."""
+        if not analysis_text: return
+        
+        self.check_space(60)
+        self.ln(5)
+        
+        self.draw_section_header("DETAILED ANALYSIS", COLORS['secondary'])
+        
+        # Background Box
+        self.set_fill_color(255, 255, 255)
+        self.set_draw_color(226, 232, 240)
+        self.rect(10, self.get_y(), 190, 45, 'DF')
+        
+        # Icon
+        self.set_xy(15, self.get_y() + 5)
+        self.set_font('Arial', 'B', 14)
+        self.set_text_color(*COLORS['secondary'])
+        self.cell(10, 10, "i", 0, 0, 'C') 
+        
+        # Text
+        self.set_xy(25, self.get_y() + 2)
+        self.set_font('Arial', '', 10)
+        self.set_text_color(*COLORS['text_main'])
+        
+        # Handle long text
+        text = sanitize_text(analysis_text)
+        if len(text) > 800: text = text[:797] + "..."
+        self.multi_cell(170, 6, text)
+        
+        # Move cursor
+        self.set_y(self.get_y() + 10)
+
+    def draw_dynamic_questions(self, questions):
+        """Draw the dynamic follow-up questions section."""
+        if not questions: return
+        
+        self.check_space(60)
+        self.ln(5)
+        
+        self.draw_section_header("DEEP DIVE QUESTIONS", COLORS['accent'])
+        
+        # Grid Background - Purple/Indigo theme
+        self.set_fill_color(248, 250, 252) # Very light slate
+        start_y = self.get_y()
+        # Estimate height based on questions
+        height = 15 + (len(questions) * 12)
+        self.rect(10, start_y, 190, height, 'F')
+        
+        current_y = start_y + 5
+        
+        for i, q in enumerate(questions):
+            self.set_xy(15, current_y)
+            self.set_font('Arial', 'B', 12)
+            self.set_text_color(*COLORS['accent'])
+            self.cell(10, 8, "?", 0, 0, 'C')
+            
+            self.set_font('Arial', 'I', 10) # Italic for questions
+            self.set_text_color(*COLORS['text_main'])
+            self.multi_cell(160, 6, sanitize_text(q))
+            
+            # Update Y for next question, assuming single line or double line
+            # Simple heuristic: add fixed spacing
+            current_y = self.get_y() + 4
+            
+        self.set_y(start_y + height + 5)
 
     def draw_section_header(self, title, color):
         self.ln(3)
@@ -1033,7 +1352,7 @@ class DashboardPDF(FPDF):
             self.draw_list_section("TRY NEXT", guidance.get('try_next', []), COLORS['accent'])
 
 
-def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None):
+def generate_report(transcript, role, ai_role, scenario, framework=None, filename="coaching_report.pdf", mode="coaching", precomputed_data=None, scenario_type=None, user_name="Valued User", ai_character="alex"):
     """
     Generate a UNIFIED PDF report for all scenario types.
     """
@@ -1041,7 +1360,7 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     if not scenario_type:
         scenario_type = detect_scenario_type(scenario, ai_role, role)
     
-    print(f"Generating Unified PDF Report (scenario_type: {scenario_type})...")
+    print(f"Generating Unified PDF Report (scenario_type: {scenario_type}) for user: {user_name}...")
     
     # Analyze data or use precomputed
     if precomputed_data:
@@ -1066,6 +1385,9 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     
     pdf = DashboardPDF()
     pdf.set_scenario_type(scenario_type)
+    pdf.set_user_name(user_name)
+    pdf.set_character(ai_character)
+    pdf.set_context(role, ai_role, scenario)
     pdf.add_page()
     
     # Get scenario_type from data if available
@@ -1075,18 +1397,31 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     meta = data.get('meta', {})
     pdf.draw_banner(meta, scenario_type=scenario_type)
     
+    # 1.5 Context Summary (New)
+    pdf.draw_context_summary()
+    
+    # 1.6 Detailed Analysis (New)
+    pdf.draw_detailed_analysis(data.get('detailed_analysis', ''))
+    
+    # 1.7 Dynamic Questions (New)
+    pdf.draw_dynamic_questions(data.get('dynamic_questions', []))
+    
     # 2. Body based on Scenario Type
     stype = str(scenario_type).lower()
     
     try:
         if 'coaching' in stype:
             pdf.draw_coaching_report(data)
+            pdf.draw_scoring_methodology() # Add methodology for coaching
         elif 'sales' in stype or 'negotiation' in stype:
             pdf.draw_sales_report(data)
+            pdf.draw_scoring_methodology() # Add methodology for sales
         elif 'learning' in stype or 'reflection' in stype:
             pdf.draw_learning_report(data)
+            # No scoring rubric for learning/reflection as they are non-evaluative
         else:
             pdf.draw_custom_report(data)
+            pdf.draw_scoring_methodology() # Add methodology for custom
     except Exception as e:
         print(f"Error drawing report body: {e}")
         import traceback

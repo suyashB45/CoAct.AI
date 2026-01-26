@@ -2,11 +2,8 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, Star, Users, Zap } from 'lucide-react';
 import Scene3D from './Scene3D';
-import { useNavigate } from 'react-router-dom';
 
 const HeroSection = () => {
-    const navigate = useNavigate();
-
     // Generate random particles
     const particles = Array.from({ length: 20 }, (_, i) => ({
         id: i,
@@ -132,9 +129,9 @@ const HeroSection = () => {
                                 className="btn-ultra-modern text-lg px-8 py-4 w-full sm:w-auto flex items-center justify-center"
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => navigate('/signup')}
+                                onClick={() => window.location.href = 'mailto:team@coact-ai.com'}
                             >
-                                Get Started Free
+                                Contact Sales
                                 <ArrowRight className="w-5 h-5 ml-2" />
                             </motion.button>
                             <motion.button

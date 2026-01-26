@@ -160,11 +160,11 @@ connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 CONTAINER_NAME = "coact-ai-reports"
 MAX_TURNS = 15 
 
-USE_AZURE = True
-if USE_AZURE:
+if os.getenv("AZURE_OPENAI_ENDPOINT"):
+    USE_AZURE = True
     client = AzureOpenAI(
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview"),
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
     )
 else:
@@ -253,8 +253,24 @@ def detect_framework_fallback(text: str) -> str:
             if word in text_lower: return fw
     return None
 
-def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching"):
+def build_summary_prompt(role, ai_role, scenario, framework, mode="coaching", ai_character="alex"):
     """Build the initial prompt for the AI coach to start the roleplay session."""
+    
+    # UNIFIED ADAPTIVE PERSONA (Replaces fixed Alex/Sarah personalities)
+    # The AI adapts its tone based on the User's Role relative to the AI.
+    
+    character_instruction = """
+### YOUR ADAPTIVE PERSONA:
+1. **IF USER IS PERFORMER (e.g., Salesperson, Staff)** -> **YOU ARE THE JUDGE**.
+   - **Tone**: Skeptical, demanding, professional.
+   - **Goal**: Test their skills. Be a "tough customer" or "exacting manager".
+   - **Behavior**: Push back on vague answers. Make them earn your agreement.
+
+2. **IF USER IS EVALUATOR (e.g., Manager, Buyer)** -> **YOU ARE THE PERFORMANCE**.
+   - **Tone**: Realistic but flawed.
+   - **Goal**: Provide a challenge to be coached/negotiated with.
+   - **Behavior**: Demonstrate the specific bad habit (e.g., defensive staff, pushy salesperson) described in the scenario.
+"""
     
     # Check for specific test scenarios to set initial behavior
     behavior_instruction = ""
@@ -314,6 +330,7 @@ YOUR ROLE:
    - If the user makes a mistake, React vaguely or negatively (as the character would).
    - Do NOT offer help, hints, or coaching.
    - Do NOT break character to explain the exercise.
+{character_instruction}
 {behavior_instruction}
 
 SCENARIO: {scenario}
@@ -335,6 +352,7 @@ YOUR DUAL ROLE:
 
 SCENARIO: {scenario}
 The user is practicing as: {role}
+{character_instruction}
 {behavior_instruction}
 
 ### COACHING APPROACH (NOT ASSESSMENT):
@@ -362,7 +380,17 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
     user_role = sess_dict.get('role', 'User')
     scenario = sess_dict.get('scenario', '')
     mode = sess_dict.get('mode', 'coaching')
+    ai_character = sess_dict.get('ai_character', 'alex') # Default to alex
     turn_count = len([t for t in transcript if t.get('role') == 'user'])
+
+    # UNIFIED FOLLOW-UP LOGIC
+    # Alex and Sarah are visually distinct but functionally identical adaptors.
+    
+    char_logic = """
+### ADAPTIVE RESPONSE LOGIC:
+- If you are playing a CUSTOMER/MANAGER (Judge): Be critical. If the user is weak, shut them down.
+- If you are playing a SALESPERSON/STAFF (Performer): Be reactive. If the user coaches well, open up. If they are aggressive, get defensive.
+"""
 
     if mode == "evaluation":
          system = f"""You are acting as {ai_role} in a SKILL ASSESSMENT simulation.
@@ -373,6 +401,7 @@ def build_followup_prompt(sess_dict, latest_user, rag_suggestions):
 - If the user is rude, shut down or get angry.
 - If the user makes a good point, acknowledge it grudgingly or professionally, but make them earn it.
 - Your goal is to provide a REALISTIC ASSESSMENT of their abilities.
+{char_logic}
 
 SCENARIO: {scenario}
 The user is practicing as: {user_role}
@@ -412,6 +441,8 @@ You must evaluate the User's communication style at every turn and adapt accordi
 3. **IF USER AVOIDS THE CORE ISSUE**:
    - **Behavior**: Bring the conversation back to the problem immediately. Do not let them change the subject.
    - **Adaptation**: Increase Persistence.
+
+{char_logic}
 
 SCENARIO: {scenario}
 The user is practicing as: {user_role}
@@ -582,10 +613,46 @@ def transcribe_audio():
 
 @app.route("/api/speak", methods=["POST"])
 def speak_text():
-    """Text-to-Speech using OpenAI/Azure. (Persistence Removed)"""
-    # This endpoint is currently unused by the frontend (which uses browser TTS).
-    # If needed, it should be updated to return base64 instead of saving to disk.
-    return jsonify({"error": "Audio persistence disabled"}), 410
+    """Text-to-Speech using OpenAI/Azure. Returns audio stream."""
+    try:
+        data = request.get_json()
+        text = data.get("text")
+        voice = data.get("voice", "alloy")
+        
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+
+        # Determine Model/Deployment Name
+        # Logic: Azure deployments often use the name 'tts' (as per user config).
+        # Standard OpenAI uses 'tts-1'.
+        default_model = "tts" if os.environ.get("AZURE_OPENAI_ENDPOINT") else "tts-1"
+        tts_model = os.environ.get("TTS_MODEL_NAME", default_model) 
+        
+        print(f"🔊 Generating TTS for: '{text[:20]}...' with voice: {voice} using model: {tts_model}")
+
+        # OpenAI TTS (Standard)
+        # Note: client is already initialized earlier in the file
+        response = client.audio.speech.create(
+            model=tts_model,
+            voice=voice,
+            input=text
+        )
+
+        # Stream the response directly back to the client
+        # We use io.BytesIO to handle the binary stream
+        return send_file(
+            io.BytesIO(response.content),
+            mimetype="audio/mpeg",
+            as_attachment=False,
+            download_name="speech.mp3"
+        )
+
+    except Exception as e:
+        print(f"❌ TTS Error: {e}")
+        # Log full traceback for debugging if needed
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -715,11 +782,15 @@ def start_session():
 
     session_id = str(uuid.uuid4())
     
-    summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode), max_tokens=150)
-    summary = sanitize_llm_output(summary)
-    
     # Get user_id from request if available (from frontend)
     user_id = data.get("user_id")
+    ai_character = data.get("ai_character", "alex") # Default to Alex
+
+    # CHARACTER MODE OVERRIDE REMOVED - Relying on scenario-based mode
+    # if ai_character == "alex": ...
+
+    summary = llm_reply(build_summary_prompt(role, ai_role, scenario, framework, mode=mode, ai_character=ai_character), max_tokens=150)
+    summary = sanitize_llm_output(summary)
     
     # Store session in memory with scenario_type and user_id
     session_data = {
@@ -736,6 +807,7 @@ def start_session():
         "completed": False,
         "report_file": None,
         "user_id": user_id,  # Store user_id for ownership verification
+        "ai_character": ai_character, # PERSIST CHARACTER CHOICE
         "meta": {"framework_counts": {}, "relevance_issues": 0}
     }
     SESSIONS[session_id] = session_data
@@ -743,7 +815,13 @@ def start_session():
     # Save to database
     save_session_to_db(session_id, session_data, user_id=user_id)
 
-    return jsonify({"session_id": session_id, "summary": summary, "framework": framework, "scenario_type": scenario_type})
+    return jsonify({
+        "session_id": session_id, 
+        "summary": summary, 
+        "framework": framework, 
+        "scenario_type": scenario_type,
+        "ai_character": ai_character 
+    })
 
 @app.post("/api/session/<session_id>/chat")
 def chat(session_id: str):
@@ -841,13 +919,32 @@ def complete_session(session_id: str):
                 sess["scenario"],
                 fw_display,
                 mode=mode,
-                scenario_type=scenario_type
+                scenario_type=scenario_type,
+                ai_character=sess.get("ai_character", "alex")
             )
             sess["report_data"] = data
         except Exception as e:
             print(f"Error generating data: {e}")
             return jsonify({"error": str(e)}), 500
     
+    # Fetch user name for report personalization
+    user_name = "Valued User"
+    user_id = sess.get("user_id")
+    if user_id:
+        try:
+            print(f"Fetching user details for {user_id}...")
+            # Use supabase_admin to fetch user by ID (requires service role key)
+            user_res = supabase_admin.auth.admin.get_user_by_id(user_id)
+            if user_res and user_res.user:
+                meta = user_res.user.user_metadata or {}
+                user_name = meta.get("full_name") or meta.get("name") or meta.get("email") or "Valued User"
+                # If it's an email, strictly strip strictly to the name part if possible, otherwise keep as is
+                if "@" in user_name and "Valued" not in user_name:
+                    pass 
+                print(f"✅ Resolved user name: {user_name}")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch user name: {e}")
+
     # Generate PDF with unified structure
     generate_report(
         sess["transcript"], 
@@ -858,7 +955,9 @@ def complete_session(session_id: str):
         filename=report_path,
         mode=mode,
         precomputed_data=sess["report_data"],
-        scenario_type=scenario_type
+        scenario_type=scenario_type,
+        user_name=user_name,
+        ai_character=sess.get("ai_character", "alex")
     )
     
     sess["completed"] = True
@@ -911,7 +1010,8 @@ def get_report_data(session_id: str):
             sess["scenario"],
             fw_arg,
             mode=mode,
-            scenario_type=scenario_type
+            scenario_type=scenario_type,
+            ai_character=sess.get("ai_character", "alex")
         )
         sess["report_data"] = data
         
@@ -919,6 +1019,7 @@ def get_report_data(session_id: str):
         response["transcript"] = sess["transcript"]
         response["scenario"] = sess["scenario"] or "No context available."
         response["scenario_type"] = scenario_type or data.get("scenario_type", "custom")
+        response["ai_character"] = sess.get("ai_character", "alex")
         return jsonify(response)
     except Exception as e:
         print(f"Error generating report data: {e}")

@@ -1,12 +1,10 @@
 import { useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import { Brain, Target, Users, Zap, Shield, TrendingUp } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 const FeaturesSection = () => {
     const ref = useRef(null);
     const isInView = useInView(ref, { once: true, amount: 0.3 });
-    const navigate = useNavigate();
 
     const features = [
         {
@@ -130,9 +128,9 @@ const FeaturesSection = () => {
                         className="btn-ultra-modern text-lg px-8 py-4"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => navigate('/practice')}
+                        onClick={() => window.location.href = 'mailto:team@coact-ai.com'}
                     >
-                        Get Started Today
+                        Contact Sales
                     </motion.button>
                 </motion.div>
             </div>
