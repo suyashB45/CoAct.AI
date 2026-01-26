@@ -963,6 +963,60 @@ def complete_session(session_id: str):
     sess["completed"] = True
     sess["report_file"] = report_path
     
+    # --- PERSISTENCE LAYER ---
+    try:
+        # 1. Save full JSON report to practice_history
+        save_session_to_db(session_id, sess, user_id=user_id)
+        
+        # 2. Extract and save structured metrics to specific tables
+        metrics = {}
+        report_data = sess["report_data"]
+        
+        if scenario_type == "sales":
+            # Extract scores from scorecard dimensions
+            for item in report_data.get("scorecard", []):
+                dim = item.get("dimension", "").lower()
+                score_str = item.get("score", "0/10").split("/")[0]
+                try:
+                    score = float(score_str)
+                except:
+                    score = 0.0
+                    
+                if "rapport" in dim:
+                    metrics["rapport_building_score"] = score
+                elif "value" in dim:
+                    metrics["value_articulation_score"] = score
+                elif "objection" in dim:
+                    metrics["objection_handling_score"] = score
+                    
+        elif scenario_type == "coaching":
+            # Extract overall grade
+            try:
+                grade_str = report_data.get("meta", {}).get("overall_grade", "0/10").split("/")[0]
+                metrics["overall_score"] = float(grade_str)
+            except:
+                metrics["overall_score"] = 0.0
+            
+            # Estimate other scores from behavioral signals if possible (mapping High/Med/Low)
+            signals = report_data.get("behavioral_signals", {})
+            def map_signal(val):
+                return 10.0 if "High" in val else 5.0 if "Medium" in val else 2.0
+            
+            metrics["empathy_score"] = map_signal(signals.get("emotional_safety", ""))
+            metrics["psych_safety_score"] = map_signal(signals.get("staff_openness", ""))
+
+        elif scenario_type == "learning":
+            metrics["skill_focus_areas"] = report_data.get("skill_focus_areas", [])
+            metrics["practice_suggestions"] = report_data.get("practice_plan", [])
+
+        # Save to specific analytics tables
+        save_report_metrics(session_id, scenario_type, metrics)
+        
+    except Exception as e:
+        print(f"❌ DB Persistence Error: {e}")
+        import traceback
+        traceback.print_exc()
+
     return jsonify({"message": "Report generated", "report_file": report_path, "scenario_type": scenario_type})
 
 @app.get("/api/report/<session_id>")
