@@ -10,17 +10,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 USE_AZURE = True 
+import httpx
+# ... imports ...
+
+load_dotenv()
+
+USE_AZURE = True 
 def setup_client():
+    # Force httpx to ignore system proxies which cause hangs on Azure VMs
+    http_client = httpx.Client(trust_env=False, timeout=30.0)
+    
     if USE_AZURE:
         return AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            http_client=http_client
         )
-    return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return OpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=http_client)
 
 client = setup_client()
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
+# Log client configuration for debugging
+print(f" [DEBUG] Azure OpenAI Client Configured. Endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}", flush=True)
+MODEL_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", os.getenv("MODEL_NAME", "gpt-4.1-mini"))
 
 # --- Premium Modern Palette ---
 COLORS = {
@@ -107,6 +119,15 @@ def sanitize_text(text):
         # Ultimate fallback: strip all non-ASCII
         return ''.join(c if ord(c) < 128 else '?' for c in text)
 
+def build_summary_prompt(role, ai_role, scenario, framework=None, mode="coaching", ai_character="alex"):
+    """
+    Constructs the system prompt for the initial summary/greeting generation.
+    """
+    return [
+        {"role": "system", "content": f"You are acting as {ai_character.capitalize()}, a professional coach."},
+        {"role": "user", "content": f"Generate a brief welcoming sentence for a {scenario} session where the user plays {role} and you play {ai_role}."}
+    ]
+
 def sanitize_data(obj):
     """Recursively sanitize all strings in a dictionary or list for PDF compatibility."""
     if isinstance(obj, str):
@@ -136,6 +157,7 @@ def get_bar_color(score):
 
 def llm_reply(messages, max_tokens=4000):
     try:
+        print(f" [DEBUG] llm_reply using MODEL_NAME: {MODEL_NAME}", flush=True)
         response = client.chat.completions.create(
             model=MODEL_NAME, messages=messages, max_tokens=max_tokens, temperature=0.4
         )
@@ -255,50 +277,67 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         if is_user_performer: # User is STAFF
             unified_instruction = """
 ### SCENARIO: COACHABILITY ASSESSMENT (USER IS STAFF)
-**GOAL**: Evaluate how well the user RECEIVES coaching.
-**MODE**: EVALUATION (Score Coachability).
+**GOAL**: Evaluate the user's openness to feedback and their ability to pivot behavior.
+**MODE**: EVALUATION (Growth-Oriented Assessment).
+**INSTRUCTIONS**:
+1. **BEHAVIORAL ANALYSIS**: Focus on the *micro-signals* (tone, pauses, word choice) that indicate defensiveness vs. genuine curiosity.
+2. **SCORECARD**: For every score, you MUST provide explicit "Proof" (a quote) and a "Growth Tactic" (a specific alternative action/phrase).
+3. **TONE**: Constructive, Encouraging, but Direct. "Tough Love".
+
 **OUTPUT JSON STRUCTURE**:
 {
-  "meta": { "scenario_id": "coaching", "outcome_status": "Success/Partial/Failure", "overall_grade": "X/10", "summary": "..." },
+  "meta": { "scenario_id": "coaching", "outcome_status": "Success/Partial/Failure", "overall_grade": "X/10", "summary": "A high-level executive summary of their coachability profile." },
   "type": "coaching",
-  "detailed_analysis": "2-3 paragraphs analysis of the user's professionalism, ownership, and attitude.",
+  "behaviour_analysis": [
+    {
+      "behavior": "Name of the behavior (e.g., Defensive Deflection, Active Evaluation)",
+      "quote": "The exact verbatim line from the transcript demonstrates this.",
+      "insight": "Detailed psychological breakdown of why this behavior undermines or aids growth.",
+      "impact": "Positive/Negative",
+      "improved_approach": "The exact phrase they SHOULD have used to build trust."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Psychological Safety Creation", "analysis": "Did they make it safe to give feedback?"},
+    {"topic": "Ownership & Accountability", "analysis": "Did they own the problem or blame external factors?"}
+  ],
   "scorecard": [
     { 
       "dimension": "Professionalism", 
       "score": "X/10", 
-      "description": "A detailed paragraph explaining exactly why this score was given, explicitly mentioning the specific behavior or mistake that led to this score.",
-      "quote": "The exact verbatim line from the transcript that helps justify this score.",
-      "suggestion": "Specific, actionable advice on what they should have done differently.",
-      "alternative_questions": [{"question": "Better phrasing example", "rationale": "Why this phrasing is more effective"}]
+      "description": "Assess their composure under pressure. Did they maintain emotional regulation?",
+      "quote": "The exact line showing their emotional state.",
+      "suggestion": "A specific breathing or pausing technique to use next time.",
+      "alternative_questions": [{"question": "I appreciate that perspective...", "rationale": "Validates before disagreeing"}]
     },
     { 
       "dimension": "Ownership", 
       "score": "X/10", 
-      "description": "A detailed paragraph analyzing whether they took true ownership or deflected blame, citing specific examples from their response.",
-      "quote": "The exact line showing their level of ownership.",
-      "suggestion": "How they could have taken stronger ownership.",
-      "alternative_questions": [{"question": "I could have done X...", "rationale": "Takes direct responsibility"}]
+      "description": "Assess if they took 'Extreme Ownership' or 'victim mindset'.",
+      "quote": "The line where they accepted or dodged responsibility.",
+      "suggestion": "How to rephrase a defensive statement into an ownership statement.",
+      "alternative_questions": [{"question": "That's on me, here is my plan...", "rationale": "Total accountability"}]
     },
     { 
       "dimension": "Active Listening", 
       "score": "X/10", 
-      "description": "A detailed paragraph evaluating their ability to validate feelings and listen, mentioning specific cues they missed or caught.",
-      "quote": "The specific line where they demonstrated or failed at listening.",
-      "suggestion": "The specific validation technique they should practice.",
-      "alternative_questions": [{"question": "What I hear you saying is...", "rationale": "Demonstrates validation before solution"}]
+      "description": "Did they listen to understand, or listen to respond?",
+      "quote": "Evidence of listening (or interrupting).",
+      "suggestion": "A specific 'looping' technique to prove they heard the feedback.",
+      "alternative_questions": [{"question": "So what you're seeing is...", "rationale": "Reflective listening loop"}]
     },
     { 
       "dimension": "Solution Focus", 
       "score": "X/10", 
-      "description": "A detailed paragraph assessing if their solution was collaborative and addressed the root cause, or if it was imposed/dismissive.",
-      "quote": "The line where they proposed the solution.",
-      "suggestion": "A more collaborative or effective solution approach.",
-      "alternative_questions": [{"question": "What if we tried X?", "rationale": "Invites collaboration"}]
+      "description": "Did they move to solution too fast? Or stay in the problem?",
+      "quote": "The specific proposal they made.",
+      "suggestion": "How to co-create a solution rather than dictating one.",
+      "alternative_questions": [{"question": "What does success look like to you?", "rationale": "Collaborative problem solving"}]
     }
   ],
-  "strengths": ["..."],
-  "missed_opportunities": ["..."],
-  "actionable_tips": ["Tip 1...", "Tip 2..."]
+  "strengths": ["Specific, high-impact strength observed..."],
+  "missed_opportunities": ["Specific moment where they could have won..."],
+  "actionable_tips": ["Tactic 1 (Do this tomorrow)...", "Tactic 2 (Mindset shift)..."]
 }
 """
         else: # User is MANAGER (Evaluator -> Mentorship)
@@ -310,7 +349,19 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 {
   "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
   "type": "learning",
-  "detailed_analysis": "2-3 paragraph professional analysis of the user's coaching style, highlighting key moments of empathy or friction.",
+  "behaviour_analysis": [
+    {
+      "behavior": "Name of the behavior (e.g., Empathy)",
+      "quote": "The exact sentence the user said.",
+      "insight": "Why this mattered.",
+      "impact": "Positive/Negative",
+      "improved_approach": "Alternative phrasing."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Coaching Style", "analysis": "Analysis content..."},
+    {"topic": "Empathy & Connection", "analysis": "Analysis content..."}
+  ],
   "key_insights": ["Insight 1...", "Insight 2..."],
   "reflective_questions": ["Question 1...", "Question 2..."],
   "growth_outcome": "Vision of the user as a better leader...",
@@ -324,56 +375,73 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
         if is_user_performer: # User is SELLER
             unified_instruction = """
 ### SCENARIO: SALES PERFORMANCE ASSESSMENT (USER IS SELLER)
-**GOAL**: Generate a Sales Performance Report.
-**MODE**: EVALUATION (Strict Grading).
+**GOAL**: Generate a High-Performance Sales Audit.
+**MODE**: EVALUATION (Commercial Excellence).
+**INSTRUCTIONS**:
+1. **REVENUE FOCUS**: Evaluate every behavior based on its likelihood to CLOSE THE DEAL or KILL THE DEAL.
+2. **EVIDENCE**: You cannot give a score without citing the exact quote that justifies it.
+3. **GROWTH**: If a score is low, you must provide the *exact script* or *tactic* that would have worked.
+
 **OUTPUT JSON STRUCTURE**:
 {
-  "meta": { "scenario_id": "sales", "outcome_status": "Closed/Negotiating/Lost", "overall_grade": "X/10", "summary": "..." },
+  "meta": { "scenario_id": "sales", "outcome_status": "Closed/Negotiating/Lost", "overall_grade": "X/10", "summary": "Executive summary of commercial impact." },
   "type": "sales",
-  "detailed_analysis": "Analysis of sales technique.",
+  "behaviour_analysis": [
+    {
+      "behavior": "Name of the behavior (e.g., Feature Dumping, Strategic Pausing)",
+      "quote": "The exact sentence used.",
+      "insight": "Why this behavior increased or decreased deal velocity.",
+      "impact": "Positive/Negative",
+      "improved_approach": "The winning line they should have used."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Sales Methodology", "analysis": "Did they follow a structured path (e.g., MEDDIC/SPIN)?"},
+    {"topic": "Value Proposition", "analysis": "Did they sell the 'Why' or just the 'What'?"}
+  ],
   "scorecard": [
     { 
       "dimension": "Rapport Building", 
       "score": "X/10", 
-      "description": "A detailed paragraph interpreting whether their rapport attempt was authentic or forced, citing specific phrasing used.",
-      "quote": "The specific line used for rapport.",
-      "suggestion": "A more effective rapport-building approach.",
-      "alternative_questions": [{"question": "How has your week been?", "rationale": "Builds personal connection"}]
+      "description": "Was the connection authentic or transactional? Did they find common ground?",
+      "quote": "The rapport attempt (or lack thereof).",
+      "suggestion": "A specific question to build deeper trust next time.",
+      "alternative_questions": [{"question": "I noticed you... How is that impacting X?", "rationale": "Connects observation to business pain"}]
     },
     { 
       "dimension": "Needs Discovery", 
       "score": "X/10", 
-      "description": "A detailed paragraph evaluating the depth of their questioning and whether they uncovered the true need.",
-      "quote": "The specific question asked (or missed opportunity).",
-      "suggestion": "The critical question they should have asked.",
-      "alternative_questions": [{"question": "What is your top priority?", "rationale": "Focuses on strategic goals"}]
+      "description": "Did they uncover the 'Pain beneath the Pain'? Or did they stay surface level?",
+      "quote": "The critical discovery question asked or missed.",
+      "suggestion": "The 'Golden Question' they forgot to ask.",
+      "alternative_questions": [{"question": "What happens if you don't solve this?", "rationale": "Implication question (SPIN)"}]
     },
     { 
       "dimension": "Value Articulation", 
       "score": "X/10", 
-      "description": "A detailed paragraph explaining if they successfully linked the product value to the user's specific pain points.",
-      "quote": "The line where they pitched the value.",
-      "suggestion": "How to make the value proposition sharper.",
-      "alternative_questions": [{"question": "This helps you save X...", "rationale": "Quantifies the benefit explicitly"}]
+      "description": "Did they map the solution specifically to the client's stated problems?",
+      "quote": "The value pitch.",
+      "suggestion": "How to make the ROI concrete and personalized.",
+      "alternative_questions": [{"question": "Based on what you said about X, here is how Y helps...", "rationale": "Direct solution mapping"}]
     },
     { 
       "dimension": "Objection Handling", 
       "score": "X/10", 
-      "description": "A detailed paragraph analyzing their emotional reaction and logical answer to the objection.",
-      "quote": "The specific response to the objection.",
-      "suggestion": "A better frame or technique for handling this objection.",
-      "alternative_questions": [{"question": "I understand your concern...", "rationale": "Validates before countering"}]
+      "description": "Did they isolate the objection? Validated it? Or did they argue?",
+      "quote": "Their response to the pushback.",
+      "suggestion": "A specific 'Empathy + Pivot' script.",
+      "alternative_questions": [{"question": "It sounds like cost is a major factor...", "rationale": "Labeling the objection"}]
     },
     { 
       "dimension": "Closing", 
       "score": "X/10", 
-      "description": "A detailed paragraph assessing the timing, confidence, and clarity of their closing attempt.",
-      "quote": "The specific closing line used.",
-      "suggestion": "A more confident or appropriate closing technique.",
-      "alternative_questions": [{"question": "Are we ready to move forward?", "rationale": "Direct check for agreement"}]
+      "description": "Did they ask for the business? Clear next steps? Or was it vague?",
+      "quote": "The closing line.",
+      "suggestion": "A stronger, more presumptive close.",
+      "alternative_questions": [{"question": "Does it make sense to start the paperwork?", "rationale": "Assumptive Close"}]
     }
   ],
-  "sales_recommendations": ["Rec 1...", "Rec 2..."]
+  "sales_recommendations": ["Commercial Insight 1...", "Commercial Insight 2..."]
 }
 """
         else: # User is BUYER (Evaluator -> Mentorship)
@@ -385,7 +453,19 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 {
   "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
   "type": "learning",
-  "detailed_analysis": "Analysis of the user's negotiation power and leverage.",
+  "behaviour_analysis": [
+    {
+      "behavior": "Behavior Name",
+      "quote": "Evidence quote.",
+      "insight": "Analysis.",
+      "impact": "Positive/Negative",
+      "improved_approach": "Suggestion."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Negotiation Power", "analysis": "Analysis content..."},
+    {"topic": "Leverage Usage", "analysis": "Analysis content..."}
+  ],
   "key_insights": ["Insight 1...", "Insight 2..."],
   "reflective_questions": ["Question 1...", "Question 2..."],
   "growth_outcome": "Vision of the user as a stronger negotiator...",
@@ -404,7 +484,19 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 {
   "meta": { "scenario_id": "learning", "outcome_status": "Completed", "overall_grade": "N/A", "summary": "..." },
   "type": "learning",
-  "detailed_analysis": "Professional analysis of the conversation.",
+  "behaviour_analysis": [
+    {
+      "behavior": "Behavior Name",
+      "quote": "Evidence quote.",
+      "insight": "Analysis.",
+      "impact": "Positive/Negative",
+      "improved_approach": "Suggestion."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Conversation Flow", "analysis": "Analysis content..."},
+    {"topic": "Key Patterns", "analysis": "Analysis content..."}
+  ],
   "key_insights": ["Pattern observed...", "Strength present..."],
   "reflective_questions": ["Question 1...", "Question 2..."],
   "practice_plan": ["Experiment 1...", "Micro-habit..."],
@@ -419,7 +511,19 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
 {
   "meta": { "scenario_id": "custom", "outcome_status": "Success/Partial", "overall_grade": "N/A", "summary": "..." },
   "type": "custom",
-  "detailed_analysis": "Analysis of performance.",
+  "behaviour_analysis": [
+    {
+      "behavior": "Behavior Name",
+      "quote": "Evidence quote.",
+      "insight": "Analysis.",
+      "impact": "Positive/Negative",
+      "improved_approach": "Suggestion."
+    }
+  ],
+  "detailed_analysis": [
+    {"topic": "Performance Overview", "analysis": "Analysis content..."},
+    {"topic": "Specific Observations", "analysis": "Analysis content..."}
+  ],
   "strengths_observed": ["..."],
   "development_opportunities": ["..."],
   "guidance": {
@@ -440,7 +544,7 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     ### ANALYST STYLE: COACH SARAH (MENTOR)
     - **Tone**: Warm, encouraging, high-EQ, "Sandwich Method" (Praise-Critique-Praise).
     - **Focus**: Psychological safety, "growth mindset", and emotional intelligence.
-    - **Detail Level**: VERY HIGH. Write 4-5 paragraphs in `detailed_analysis`. Go deep into the "why" behind the user's choices.
+    - **Detail Level**: VERY HIGH. Write 2-3 distinct topic sections in `detailed_analysis`. Go deep into the "why" behind the user's choices.
     - **Signature**: Use phrases like "I loved how you...", "Consider trying...", "A small tweak could be...".
     """
     else: # Default to Alex
@@ -448,7 +552,7 @@ def analyze_full_report_data(transcript, role, ai_role, scenario, framework=None
     ### ANALYST STYLE: COACH ALEX (EVALUATOR)
     - **Tone**: Professional, direct, analytical, "Bottom Line Up Front".
     - **Focus**: Efficiency, clear outcomes, negotiation leverage, and rapid improvement.
-    - **Detail Level**: VERY HIGH. Write 4-5 paragraphs in `detailed_analysis`. Break down the interaction mechanism by mechanism.
+    - **Detail Level**: VERY HIGH. Write 2-3 distinct topic sections in `detailed_analysis`. Break down the interaction mechanism by mechanism.
     - **Signature**: Use phrases like "The metrics show...", "You missed an opportunity to...", "To optimize, you must...".
     """
 
@@ -590,12 +694,12 @@ class DashboardPDF(FPDF):
                 self.set_font('Arial', 'I', 9)
                 super().cell(50, 5, f"Prepared for: {self.user_name}", 0, 0, 'R')
 
-            # Avatar Image (Dynamic)
-            if hasattr(self, 'ai_character'):
-                char_name = self.ai_character.lower()
-                img_path = f"{char_name}.png"
-                if os.path.exists(img_path):
-                     self.image(img_path, x=188, y=8, w=15)
+            # Avatar Image (Removed as per request)
+            # if hasattr(self, 'ai_character'):
+            #     char_name = self.ai_character.lower()
+            #     img_path = f"{char_name}.png"
+            #     if os.path.exists(img_path):
+            #          self.image(img_path, x=188, y=8, w=15)
 
             self.ln(35)
         else:
@@ -607,12 +711,12 @@ class DashboardPDF(FPDF):
             self.set_text_color(255, 255, 255)
             super().cell(100, 6, 'CoAct.AI Report', 0, 0, 'L')
             
-            # Avatar Icon Scalling Small
-            if hasattr(self, 'ai_character'):
-                char_name = self.ai_character.lower()
-                img_path = f"{char_name}.png"
-                if os.path.exists(img_path):
-                    self.image(img_path, x=5, y=2, w=10)
+            # Avatar Icon Scalling Small (Removed)
+            # if hasattr(self, 'ai_character'):
+            #     char_name = self.ai_character.lower()
+            #     img_path = f"{char_name}.png"
+            #     if os.path.exists(img_path):
+            #         self.image(img_path, x=5, y=2, w=10)
                     
             # Page indicator
             self.set_font('Arial', '', 9)
@@ -624,6 +728,10 @@ class DashboardPDF(FPDF):
         self.user_role = sanitize_text(role)
         self.ai_role = sanitize_text(ai_role)
         self.scenario_text = sanitize_text(scenario)
+
+    def check_space(self, height):
+        if self.get_y() + height > self.page_break_trigger:
+            self.add_page()
 
     def draw_context_summary(self):
         """Draw a summary of the scenario context and roles."""
@@ -719,38 +827,68 @@ class DashboardPDF(FPDF):
 
         self.set_y(start_y + 42)
 
-    def draw_detailed_analysis(self, analysis_text):
-        """Draw the detailed analysis section."""
-        if not analysis_text: return
+    def draw_detailed_analysis(self, analysis_data):
+        """Draw the detailed analysis section (Supporting string or list of topics)."""
+        if not analysis_data: return
         
-        self.check_space(60)
-        self.ln(5)
-        
-        self.draw_section_header("DETAILED ANALYSIS", COLORS['secondary'])
-        
-        # Background Box
-        self.set_fill_color(255, 255, 255)
-        self.set_draw_color(226, 232, 240)
-        self.rect(10, self.get_y(), 190, 45, 'DF')
-        
-        # Icon
-        self.set_xy(15, self.get_y() + 5)
-        self.set_font('Arial', 'B', 14)
-        self.set_text_color(*COLORS['secondary'])
-        self.cell(10, 10, "i", 0, 0, 'C') 
-        
-        # Text
-        self.set_xy(25, self.get_y() + 2)
-        self.set_font('Arial', '', 10)
-        self.set_text_color(*COLORS['text_main'])
-        
-        # Handle long text
-        text = sanitize_text(analysis_text)
-        if len(text) > 800: text = text[:797] + "..."
-        self.multi_cell(170, 6, text)
-        
-        # Move cursor
-        self.set_y(self.get_y() + 10)
+        # 1. Handle Legacy String Format (Backward Compatibility)
+        if isinstance(analysis_data, str):
+            self.check_space(60)
+            self.ln(5)
+            self.draw_section_header("DETAILED ANALYSIS", COLORS['secondary'])
+            
+            # Background Box
+            self.set_fill_color(255, 255, 255)
+            self.set_draw_color(226, 232, 240)
+            self.rect(10, self.get_y(), 190, 45, 'DF') # Fixed height fallback
+            
+            # Icon
+            self.set_xy(15, self.get_y() + 5)
+            self.set_font('Arial', 'B', 14)
+            self.set_text_color(*COLORS['secondary'])
+            self.cell(10, 10, "i", 0, 0, 'C') 
+            
+            # Text
+            self.set_xy(25, self.get_y() + 2)
+            self.set_font('Arial', '', 10)
+            self.set_text_color(*COLORS['text_main'])
+            
+            text = sanitize_text(analysis_data)
+            if len(text) > 800: text = text[:797] + "..."
+            self.multi_cell(170, 6, text)
+            self.set_y(self.get_y() + 10)
+            return
+
+        # 2. Handle New List Format (Topic-Wise)
+        # Expected: [{"topic": "Title", "analysis": "Content..."}, ...]
+        if isinstance(analysis_data, list):
+            self.check_space(60)
+            self.ln(5)
+            self.draw_section_header("DETAILED ANALYSIS", COLORS['secondary'])
+            
+            for item in analysis_data:
+                topic = sanitize_text(item.get('topic', 'Topic'))
+                content = sanitize_text(item.get('analysis', ''))
+                
+                # Estimate height
+                self.set_font('Arial', '', 10)
+                # approx 95 chars per line at 190mm width? 
+                # safely assuming 85 chars per line for wrapped text
+                num_lines = math.ceil(len(content) / 85) 
+                height = (num_lines * 5) + 15 # +15 for padding/header
+                
+                self.check_space(height)
+                
+                # Draw Topic Header
+                self.set_font('Arial', 'B', 10)
+                self.set_text_color(*COLORS['primary'])
+                self.cell(0, 6, topic.upper(), 0, 1)
+                
+                # Draw Content
+                self.set_font('Arial', '', 10)
+                self.set_text_color(*COLORS['text_main'])
+                self.multi_cell(190, 5, content)
+                self.ln(4) # Spacing between topics
 
     def draw_dynamic_questions(self, questions):
         """Draw the dynamic follow-up questions section."""
@@ -785,6 +923,89 @@ class DashboardPDF(FPDF):
             current_y = self.get_y() + 4
             
         self.set_y(start_y + height + 5)
+
+    def draw_behaviour_analysis(self, analysis_data):
+        """Draw the detailed Behaviour Analysis section."""
+        if not analysis_data: return
+
+        self.check_space(80)
+        self.ln(5)
+        self.draw_section_header("BEHAVIOURAL ANALYSIS", COLORS['primary'])
+
+        for item in analysis_data:
+            behavior = sanitize_text(item.get('behavior', 'Behavior'))
+            quote = sanitize_text(item.get('quote', ''))
+            insight = sanitize_text(item.get('insight', ''))
+            impact = sanitize_text(item.get('impact', 'Neutral'))
+            improved = sanitize_text(item.get('improved_approach', ''))
+
+            # Determine color based on impact
+            impact_color = COLORS['secondary']
+            if 'positive' in impact.lower(): impact_color = COLORS['success']
+            elif 'negative' in impact.lower(): impact_color = COLORS['danger']
+            
+            # Estimate height
+            height = 35 # Base height
+            if quote: height += 10
+            if insight: height += len(insight) // 90 * 5 + 5
+            if improved: height += len(improved) // 90 * 5 + 10
+            
+            self.check_space(height + 5)
+            
+            start_y = self.get_y()
+            
+            # Left Bar (Impact Color)
+            self.set_fill_color(*impact_color)
+            self.rect(10, start_y, 2, height, 'F')
+            
+            # Background
+            self.set_fill_color(248, 250, 252)
+            self.rect(12, start_y, 188, height, 'F')
+            
+            current_y = start_y + 2
+            
+            # Header: Behavior + Impact
+            self.set_xy(15, current_y)
+            self.set_font('Arial', 'B', 10)
+            self.set_text_color(*COLORS['text_main'])
+            self.cell(100, 6, behavior.upper(), 0, 0)
+            
+            self.set_font('Arial', 'B', 8)
+            self.set_text_color(*impact_color)
+            self.cell(80, 6, impact.upper(), 0, 1, 'R')
+            
+            current_y += 8
+            
+            # Quote (Proof)
+            if quote:
+                self.set_xy(15, current_y)
+                self.set_font('Arial', 'BI', 9) # Bold Italic
+                self.set_text_color(80, 80, 80)
+                self.multi_cell(180, 5, f'"{quote}"')
+                current_y = self.get_y() + 2
+                
+            # Insight (Analysis)
+            if insight:
+                self.set_xy(15, current_y)
+                self.set_font('Arial', '', 9)
+                self.set_text_color(*COLORS['text_main'])
+                self.multi_cell(180, 5, insight)
+                current_y = self.get_y() + 4
+                
+            # Improved Approach (Actionable Advice)
+            if improved:
+                self.set_xy(15, current_y)
+                self.set_font('Arial', 'B', 9)
+                self.set_text_color(*COLORS['accent'])
+                self.cell(40, 5, "TRY THIS INSTEAD:", 0, 0)
+                
+                self.set_font('Arial', 'I', 9)
+                self.set_text_color(*COLORS['text_main'])
+                self.multi_cell(140, 5, improved)
+                current_y = self.get_y() + 2
+
+            # Bottom Spacer
+            self.set_y(start_y + height + 4)
 
     def draw_section_header(self, title, color):
         self.ln(3)
@@ -1284,21 +1505,155 @@ class DashboardPDF(FPDF):
             self.set_text_color(*COLORS['text_main'])
             self.multi_cell(0, 7, sanitize_text(str(item)))
 
+    def draw_two_column_lists(self, title_left, items_left, color_left, title_right, items_right, color_right):
+        """Draw two lists side-by-side with dynamic height calculation."""
+        if not items_left and not items_right: return
+        
+        start_y = self.get_y() + 5
+        mid_x = 105
+        col_width = 90
+        
+        # Helper to calculate list height
+        def calculate_list_height(items, width_mm, font_size=9):
+            total_h = 0
+            chars_per_line = (width_mm * 2.3) # approx const for Arial 9
+            for item in items:
+                txt = sanitize_text(str(item))
+                # rough estimate
+                lines = math.ceil(len(txt) / 50) # conservative 50 chars per line for 90mm
+                total_h += (lines * 6) + 2 # 6mm line height, 2mm padding
+            return total_h
+
+        # Calculate heights
+        h_left = calculate_list_height(items_left, col_width) + 10 # +10 header
+        h_right = calculate_list_height(items_right, col_width) + 10
+        max_h = max(h_left, h_right)
+        
+        self.check_space(max_h + 20)
+        self.ln(5)
+        
+        # Recalculate start_y in case of page break
+        start_y = self.get_y()
+        
+        # Draw Headers
+        self.set_xy(10, start_y)
+        self.draw_section_header(title_left, color_left)
+        self.set_xy(mid_x + 5, start_y)
+        self.draw_section_header(title_right, color_right)
+        
+        content_start_y = self.get_y()
+        
+        # Draw Backgrounds with dynamic height
+        # Left Card
+        self.set_fill_color(250, 250, 255) 
+        self.rect(10, content_start_y, col_width, max_h, 'F')
+        # Right Card
+        self.rect(mid_x + 5, content_start_y, col_width, max_h, 'F')
+        
+        # Draw LEFT Items
+        self.set_xy(10, content_start_y + 2)
+        self.set_font('Arial', '', 9)
+        current_y_left = content_start_y + 2
+        
+        for item in items_left:
+            self.set_xy(15, current_y_left) # Indent
+            self.set_text_color(*color_left)
+            self.cell(5, 6, "+", 0, 0)
+            self.set_text_color(*COLORS['text_main'])
+            
+            # Save X,Y
+            x = self.get_x()
+            y = self.get_y()
+            
+            self.multi_cell(col_width - 10, 6, sanitize_text(str(item)))
+            current_y_left = self.get_y() + 1 # small gap
+            
+        # Draw RIGHT Items
+        current_y_right = content_start_y + 2
+        for item in items_right:
+            self.set_xy(mid_x + 10, current_y_right) # Indent
+            self.set_text_color(*color_right)
+            self.cell(5, 6, "!", 0, 0)
+            self.set_text_color(*COLORS['text_main'])
+            
+            self.multi_cell(col_width - 10, 6, sanitize_text(str(item)))
+            current_y_right = self.get_y() + 1 
+
+        # Move cursor to bottom of tallest column
+        self.set_y(content_start_y + max_h + 5)
+
+    def draw_transcript(self, transcript):
+        """Draw the detailed chat transcript at the end."""
+        if not transcript: return
+        self.add_page()
+        
+        self.draw_section_header("SESSION TRANSCRIPT", COLORS['primary'])
+        self.ln(5)
+        
+        for msg in transcript:
+            role = msg.get('role', 'user')
+            content = sanitize_text(msg.get('content', ''))
+            
+            self.set_font('Arial', 'B', 8)
+            
+            if role == 'user':
+                # User (Right side)
+                self.set_text_color(*COLORS['accent'])
+                self.cell(0, 5, "YOU", 0, 1, 'R')
+                
+                self.set_font('Arial', '', 9)
+                self.set_text_color(255, 255, 255)
+                self.set_fill_color(*COLORS['accent']) # Blue bubble
+                
+                # Calculate height
+                # FPDF multi_cell doesn't return height easily, so estimating
+                # We'll use a fixed width for the bubble
+                bubble_w = 140
+                x_pos = 200 - bubble_w - 10 # Right align
+                
+                self.set_x(x_pos)
+                self.multi_cell(bubble_w, 6, content, 0, 'L', True)
+                
+            else:
+                # Assistant (Left side)
+                self.set_text_color(*COLORS['text_light'])
+                self.cell(0, 5, "COACH", 0, 1, 'L')
+                
+                self.set_font('Arial', '', 9)
+                self.set_text_color(*COLORS['text_main'])
+                self.set_fill_color(241, 245, 249) # Gray bubble
+                
+                bubble_w = 140
+                self.set_x(10)
+                self.multi_cell(bubble_w, 6, content, 0, 'L', True)
+            
+            self.ln(3)
+
     # --- MAIN SCENARIO DRAWING ---
 
     def draw_coaching_report(self, data):
         self.draw_scorecard(data.get('scorecard', []))
         self.draw_key_value_grid("BEHAVIORAL SIGNALS", data.get('behavioral_signals', {}))
-        self.draw_list_section("STRENGTHS", data.get('strengths', []), COLORS['success'], "+")
-        self.draw_list_section("MISSED OPPORTUNITIES", data.get('missed_opportunities', []), COLORS['warning'], "!")
+        
+        # Use 2-Column Layout for Strengths/Weaknesses
+        self.draw_two_column_lists(
+            "KEY STRENGTHS", data.get('strengths', []), COLORS['success'],
+            "MISSED OPPORTUNITIES", data.get('missed_opportunities', []), COLORS['warning']
+        )
+        
         self.draw_key_value_grid("COACHING IMPACT", data.get('coaching_impact', {}), COLORS['purple'])
         self.draw_list_section("ACTIONABLE TIPS", data.get('actionable_tips', []), COLORS['accent'], "->")
 
     def draw_sales_report(self, data):
         self.draw_scorecard(data.get('scorecard', []))
         self.draw_key_value_grid("SIMULATION ANALYSIS", data.get('simulation_analysis', {}))
-        self.draw_list_section("WHAT WORKED", data.get('what_worked', []), COLORS['success'], "V")
-        self.draw_list_section("LIMITATIONS", data.get('what_limited_effectiveness', []), COLORS['danger'], "X")
+        
+        # Use 2-Column Layout
+        self.draw_two_column_lists(
+            "WHAT WORKED", data.get('what_worked', []), COLORS['success'],
+            "LIMITATIONS", data.get('what_limited_effectiveness', []), COLORS['danger']
+        )
+        
         self.draw_key_value_grid("REVENUE IMPACT", data.get('revenue_impact', {}), COLORS['danger'])
         self.draw_list_section("RECOMMENDATIONS", data.get('sales_recommendations', []), COLORS['accent'])
 
@@ -1402,6 +1757,9 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
     
     # 1.6 Detailed Analysis (New)
     pdf.draw_detailed_analysis(data.get('detailed_analysis', ''))
+
+    # 1.65 Behaviour Analysis (New)
+    pdf.draw_behaviour_analysis(data.get('behaviour_analysis', []))
     
     # 1.7 Dynamic Questions (New)
     pdf.draw_dynamic_questions(data.get('dynamic_questions', []))
@@ -1422,6 +1780,11 @@ def generate_report(transcript, role, ai_role, scenario, framework=None, filenam
         else:
             pdf.draw_custom_report(data)
             pdf.draw_scoring_methodology() # Add methodology for custom
+            
+        # 3. Transcript (New)
+        if transcript:
+            pdf.draw_transcript(transcript)
+
     except Exception as e:
         print(f"Error drawing report body: {e}")
         import traceback

@@ -1,4 +1,8 @@
 import os
+# FORCE PROXY BYPASS FOR AZURE (Must be before other imports)
+os.environ['NO_PROXY'] = 'azure.com,microsoft.com,windows.net,localhost,127.0.0.1'
+os.environ['no_proxy'] = 'azure.com,microsoft.com,windows.net,localhost,127.0.0.1'
+
 import json
 import re
 import uuid
@@ -12,6 +16,9 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI, OpenAI
 
 load_dotenv()
+
+# Proxy config moved to top
+
 from supabase import create_client, Client
 
 # Initialize Supabase Client
@@ -27,7 +34,7 @@ supabase_admin: Client = create_client(url, service_key) if service_key else sup
 # Custom Modules & Setup
 # ---------------------------------------------------------
 try:
-    from cli_report import generate_report, llm_reply, analyze_full_report_data, detect_scenario_type
+    from cli_report import generate_report, llm_reply, analyze_full_report_data, detect_scenario_type, build_summary_prompt
 except ImportError as e:
     print(f"CRITICAL ERROR: Failed to import cli_report modules: {e}")
     import traceback
@@ -53,10 +60,10 @@ try:
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     init_db(app)
-    print("✅ Database connection established")
+    print(" [SUCCESS] Database connection established")
 except Exception as e:
-    print(f"⚠️ Database initialization failed: {e}")
-    USE_DATABASE = True
+    print(f" [WARNING] Database initialization failed: {e}")
+    USE_DATABASE = False
 
 # Enable CORS
 flask_cors.CORS(app)
@@ -128,6 +135,7 @@ def save_session_to_db(session_id: str, session_data: dict, user_id: int = None)
         return
     
     try:
+        print(f"[DEBUG] Saving session {session_id} to DB (User: {user_id})...")
         # We need an app context for threading
         with app.app_context():
             db_session = get_session_by_id(session_id)
@@ -136,6 +144,7 @@ def save_session_to_db(session_id: str, session_data: dict, user_id: int = None)
                 update_session(session_id, {
                     "transcript": session_data.get("transcript", []),
                     "report_data": session_data.get("report_data", {}),
+                    "behaviour_analysis": session_data.get("report_data", {}).get("behaviour_analysis", []),
                     "status": "completed" if session_data.get("completed") else "active"
                 })
             else:
@@ -181,11 +190,11 @@ def load_questions():
         if os.path.exists(QUESTIONS_FILE):
             with open(QUESTIONS_FILE, "r", encoding="utf-8") as f:
                 questions_data = json.load(f)
-            print(f"✅ Loaded {len(questions_data)} questions from JSON.")
+            print(f"[SUCCESS] Loaded {len(questions_data)} questions from JSON.")
         else:
-            print(f"⚠️ Questions file not found at {QUESTIONS_FILE}.")
+            print(f"[WARNING] Questions file not found at {QUESTIONS_FILE}.")
     except Exception as e:
-        print(f"❌ Error loading questions: {e}")
+        print(f"[ERROR] Error loading questions: {e}")
 
 load_questions()
 
@@ -519,6 +528,7 @@ def get_history():
 @app.route("/api/health")
 def health_check():
     """Health check endpoint for VM monitoring"""
+    print("[DEBUG] Health check called", flush=True)
     return jsonify({
         "status": "healthy",
         "timestamp": dt.datetime.now().isoformat(),
@@ -579,7 +589,7 @@ def transcribe_audio():
             audio_url = None
         
         try:
-            print(f"🎤 Transcribing audio with Whisper ({WHISPER_MODEL})...")
+            print(f" [INFO] Transcribing audio with Whisper ({WHISPER_MODEL})...")
             
             with open(read_path, "rb") as audio:
                 result = client.audio.transcriptions.create(
@@ -591,7 +601,7 @@ def transcribe_audio():
                 )
             
             transcribed_text = result.text.strip()
-            print(f"✅ Transcribed: {transcribed_text[:100]}...")
+            print(f" [SUCCESS] Transcribed: {transcribed_text[:100]}...")
             
             return jsonify({
                 "text": transcribed_text, 
@@ -608,7 +618,7 @@ def transcribe_audio():
                 
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ STT Error: {error_msg}")
+        print(f" [ERROR] STT Error: {error_msg}")
         return jsonify({"error": error_msg}), 500
 
 @app.route("/api/speak", methods=["POST"])
@@ -626,9 +636,9 @@ def speak_text():
         # Logic: Azure deployments often use the name 'tts' (as per user config).
         # Standard OpenAI uses 'tts-1'.
         default_model = "tts" if os.environ.get("AZURE_OPENAI_ENDPOINT") else "tts-1"
-        tts_model = os.environ.get("TTS_MODEL_NAME", default_model) 
+        tts_model = os.environ.get("AZURE_OPENAI_TTS_DEPLOYMENT", os.environ.get("TTS_MODEL_NAME", default_model)) 
         
-        print(f"🔊 Generating TTS for: '{text[:20]}...' with voice: {voice} using model: {tts_model}")
+        print(f" [INFO] Generating TTS for: '{text[:20]}...' with voice: {voice} using model: {tts_model}")
 
         # OpenAI TTS (Standard)
         # Note: client is already initialized earlier in the file
@@ -648,7 +658,7 @@ def speak_text():
         )
 
     except Exception as e:
-        print(f"❌ TTS Error: {e}")
+        print(f" [ERROR] TTS Error: {e}")
         # Log full traceback for debugging if needed
         import traceback
         traceback.print_exc()
@@ -698,7 +708,7 @@ Based on the scenario, respond with ONLY the framework names separated by commas
         # Filter to only valid frameworks
         valid = [fw for fw in frameworks if fw in ALL_FRAMEWORKS]
         if valid:
-            print(f"🎯 AI selected frameworks for scenario: {valid}")
+            print(f" [TARGET] AI selected frameworks for scenario: {valid}")
             return valid
     except Exception as e:
         print(f"Framework selection error: {e}")
@@ -727,21 +737,22 @@ def detect_session_mode(scenario: str, ai_role: str) -> str:
     # Check for assessment keywords
     for keyword in assessment_keywords:
         if keyword in scenario_lower or keyword in ai_role_lower:
-            print(f"🎯 Auto-detected ASSESSMENT mode (keyword: '{keyword}')")
+            print(f" [TARGET] Auto-detected ASSESSMENT mode (keyword: '{keyword}')")
             return "assessment"
     
     # Check for learning keywords
     for keyword in learning_keywords:
         if keyword in scenario_lower or keyword in ai_role_lower:
-            print(f"📚 Auto-detected LEARNING mode (keyword: '{keyword}')")
+            print(f" [INFO] Auto-detected LEARNING mode (keyword: '{keyword}')")
             return "learning"
     
     # Default to learning mode for safe practice
-    print("📚 Defaulting to LEARNING mode (no clear indicators)")
+    print(" [INFO] Defaulting to LEARNING mode (no clear indicators)")
     return "learning"
 
 @app.post("/session/start")
 def start_session():
+    print("[DEBUG] Entered /session/start", flush=True)
     # Audio cleanup logic removed
 
 
@@ -761,7 +772,7 @@ def start_session():
     # Auto-detect scenario_type if not explicitly provided
     if not scenario_type:
         scenario_type = detect_scenario_type(scenario, ai_role, role)
-    print(f"📋 Session scenario_type set to: {scenario_type}")
+    print(f"[INFO] Session scenario_type set to: {scenario_type}")
     
     # Map scenario_type to mode for backward compatibility with roleplay prompts
     mode_map = {
@@ -941,9 +952,9 @@ def complete_session(session_id: str):
                 # If it's an email, strictly strip strictly to the name part if possible, otherwise keep as is
                 if "@" in user_name and "Valued" not in user_name:
                     pass 
-                print(f"✅ Resolved user name: {user_name}")
+                print(f" [SUCCESS] Resolved user name: {user_name}")
         except Exception as e:
-            print(f"⚠️ Failed to fetch user name: {e}")
+            print(f" [WARNING] Failed to fetch user name: {e}")
 
     # Generate PDF with unified structure
     generate_report(
@@ -1013,7 +1024,7 @@ def complete_session(session_id: str):
         save_report_metrics(session_id, scenario_type, metrics)
         
     except Exception as e:
-        print(f"❌ DB Persistence Error: {e}")
+        print(f" [ERROR] DB Persistence Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -1033,9 +1044,37 @@ def view_report(session_id: str):
 
 @app.get("/api/session/<session_id>/report_data")
 def get_report_data(session_id: str):
+    # 1. AUTHENTICATE USER
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    # 2. VERIFY OWNERSHIP
+    # Check in-memory first
     sess = SESSIONS.get(session_id)
-    if not sess: 
-        return jsonify({"error": "Session not found"}), 404
+    if sess:
+        # If session is in memory, check if it belongs to user
+        # (Assuming create_session stores user_id in SESSIONS)
+        if str(sess.get("user_id")) != str(user.id):
+             return jsonify({"error": "Forbidden: This session belongs to another user"}), 403
+    else:
+        # Check database
+        if USE_DATABASE:
+            from models import get_session_by_id
+            db_sess = get_session_by_id(session_id)
+            if not db_sess:
+                return jsonify({"error": "Session not found"}), 404
+            
+            # DB Check
+            if str(db_sess.user_id) != str(user.id):
+                 return jsonify({"error": "Forbidden: This session belongs to another user"}), 403
+            
+            # Load into memory for processing
+            sess = db_sess.to_dict()
+            SESSIONS[session_id] = sess
+        else:
+             return jsonify({"error": "Session not found"}), 404
+
     
     # Return cached data if available
     if sess["report_data"]:
@@ -1107,10 +1146,10 @@ def clear_sessions():
     """Clear all session history."""
     try:
         SESSIONS.clear()
-        print("✅ Sessions cleared successfully")
+        print(" [SUCCESS] Sessions cleared successfully")
         return jsonify({"message": "History cleared successfully"})
     except Exception as e:
-        print(f"❌ Error clearing sessions: {e}")
+        print(f" [ERROR] Error clearing sessions: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.get("/api/scenarios")

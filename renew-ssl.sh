@@ -1,12 +1,21 @@
 #!/bin/bash
-# Auto-renew SSL certificates every 90 days
-# Run this script via cron on your Azure VM
+
+LOG_FILE="/var/log/certbot-renew.log"
+PROJECT_DIR="/CoAct.AI"
+DOCKER="/usr/bin/docker"
+
+echo "$(date): Starting certificate renewal check" >> $LOG_FILE
 
 # Renew certificates
-certbot renew --quiet
+if certbot renew --quiet; then
+    echo "$(date): Certbot renew command executed" >> $LOG_FILE
 
-# Reload nginx to pick up new certificates
-cd /path/to/CoAct.AI
-docker compose exec frontend nginx -s reload
+    # Reload nginx inside container (no TTY)
+    cd $PROJECT_DIR || exit
+    $DOCKER compose exec -T frontend nginx -s reload
 
-echo "$(date): Certificate renewal check completed" >> /var/log/certbot-renew.log
+    echo "$(date): Nginx reloaded successfully" >> $LOG_FILE
+else
+    echo "$(date): Certbot renewal failed" >> $LOG_FILE
+fi
+echo "$(date): Certificate renewal check completed" >> $LOG_FILE

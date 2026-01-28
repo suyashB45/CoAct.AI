@@ -23,29 +23,33 @@ class PracticeHistory(db.Model):
     session_id = db.Column(db.String(50), primary_key=True)
     # user_id stores Supabase auth.users UUID directly (no FK since no local users table)
     user_id = db.Column(UUID(as_uuid=True), nullable=True) 
-    scenario_id = db.Column(db.String(50), nullable=False)
+    scenario = db.Column(db.String(50), nullable=True) # Renamed from scenario_id to match DB
     score = db.Column(db.Integer)
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow) # Renamed from date
     scenario_type = db.Column(db.String(50), nullable=False)
     role = db.Column(db.String(100))
     ai_role = db.Column(db.String(100))
     transcript = db.Column(JSONB)
     report_data = db.Column(JSONB)
+    behaviour_analysis = db.Column(JSONB) # Dedicated column for analysis
     completed = db.Column(db.Boolean, default=False)
 
     sales_report = db.relationship("SalesReport", backref="session", uselist=False, cascade="all, delete-orphan")
     learning_plan = db.relationship("LearningPlan", backref="session", uselist=False, cascade="all, delete-orphan")
+    coaching_report = db.relationship("CoachingReport", backref="session", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
             "session_id": self.session_id,
             "user_id": self.user_id,
-            "date": self.date.isoformat() if self.date else None,
+            "scenario": self.scenario,
+            "date": self.created_at.isoformat() if self.created_at else None,
             "scenario_type": self.scenario_type,
             "role": self.role,
             "ai_role": self.ai_role,
             "transcript": self.transcript,
             "report_data": self.report_data,
+            "behaviour_analysis": self.behaviour_analysis,
             "completed": self.completed,
             "reports": {
                 "coaching": self.coaching_report.to_dict() if self.coaching_report else None,
@@ -118,7 +122,7 @@ def get_user_by_email(email):
 
 def get_user_history(user_id):
     """Get all practice sessions for a specific user, ordered by date."""
-    return PracticeHistory.query.filter_by(user_id=user_id).order_by(PracticeHistory.date.desc()).all()
+    return PracticeHistory.query.filter_by(user_id=user_id).order_by(PracticeHistory.created_at.desc()).all()
 
 def get_session_by_id(session_id):
     return PracticeHistory.query.get(session_id)
@@ -149,11 +153,13 @@ def create_session(session_id, data, user_id=None):
     new_session = PracticeHistory(
         session_id=session_id,
         user_id=user_id, # Link to logged-in user
+        scenario=data.get("scenario"), # Renamed from scenario_id
         scenario_type=data.get("scenario_type", "custom"),
         role=data.get("role"),
         ai_role=data.get("ai_role"),
         transcript=data.get("transcript", []),
         report_data={},
+        behaviour_analysis=data.get("behaviour_analysis", []),
         completed=False
     )
     db.session.add(new_session)
@@ -168,6 +174,8 @@ def update_session(session_id, data):
             session.transcript = data["transcript"]
         if "report_data" in data:
             session.report_data = data["report_data"]
+        if "behaviour_analysis" in data:
+            session.behaviour_analysis = data["behaviour_analysis"]
         if "status" in data:
             session.completed = (data["status"] == "completed")
         
@@ -207,7 +215,7 @@ def save_report_metrics(session_id, report_type, metrics):
             db.session.add(report)
             
         db.session.commit()
-        print(f"✅ Saved {report_type} report metrics for session {session_id}")
+        print(f" [SUCCESS] Saved {report_type} report metrics for session {session_id}")
     except Exception as e:
-        print(f"❌ Error saving report metrics: {e}")
+        print(f" [ERROR] Error saving report metrics: {e}")
         db.session.rollback()

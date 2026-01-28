@@ -29,8 +29,8 @@ echo ========================================
 echo.
 echo Access your application:
 echo   Frontend: http://localhost
-echo   Public:   https://coact-ai.com
-echo   API:      https://coact-ai.com/api/
+echo   Public:   http://coact-ai.centralindia.cloudapp.azure.com
+echo   API:      http://coact-ai.centralindia.cloudapp.azure.com/api/
 echo.
 echo Commands:
 echo   View logs:    docker-compose logs -f

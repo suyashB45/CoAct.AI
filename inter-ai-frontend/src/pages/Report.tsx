@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Download, AlertCircle, Target, History, Zap, Award, BookOpen, Briefcase, MessageSquare, ChevronRight, Check, X, ArrowRight } from "lucide-react"
 import { motion, Variants } from "framer-motion"
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts'
 
 import Navigation from "../components/landing/Navigation"
 import { getApiUrl } from "@/lib/api"
@@ -567,12 +568,107 @@ const KeyValueRow = ({ label, value, highlight = false }: any) => (
     </div>
 )
 
+// --- CHARTS ---
+
+
+const SkillsRadarChart = ({ data }: { data: any[] }) => {
+    // Process data: extract label and score
+    if (!data || data.length === 0) return null;
+
+    // Pass full details to the chart data for the tooltip
+    const chartData = data.map(item => ({
+        subject: item.dimension,
+        A: parseFloat(item.score?.split('/')[0] || 0),
+        fullMark: 10,
+        quote: item.quote,
+        suggestion: item.suggestion,
+        desc: item.description
+    }));
+
+    const CustomTooltip = ({ active, payload }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-slate-900/95 border border-white/10 p-4 rounded-xl shadow-2xl max-w-xs backdrop-blur-xl">
+                    <p className="font-bold text-white text-lg mb-1">{data.subject}</p>
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-2xl font-black text-blue-400">{data.A}</span>
+                        <span className="text-slate-500 text-xs uppercase font-bold tracking-wider">/ 10 Score</span>
+                    </div>
+
+                    {data.quote && (
+                        <div className="mb-3 bg-white/5 p-2 rounded-lg border border-white/5">
+                            <div className="flex items-center gap-1 mb-1 opacity-70">
+                                <MessageSquare className="w-3 h-3 text-slate-400" />
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">Proof</span>
+                            </div>
+                            <p className="text-xs text-slate-300 italic">"{data.quote}"</p>
+                        </div>
+                    )}
+
+                    {data.suggestion && (
+                        <div className="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/10">
+                            <div className="flex items-center gap-1 mb-1">
+                                <Zap className="w-3 h-3 text-emerald-400" />
+                                <span className="text-[10px] font-bold text-emerald-400 uppercase">Suggestion</span>
+                            </div>
+                            <p className="text-xs text-emerald-100/80">{data.suggestion}</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        return null;
+    };
+
+    return (
+        <div className="h-[300px] w-full mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
+                    <PolarGrid stroke="rgba(255,255,255,0.1)" />
+                    <PolarAngleAxis
+                        dataKey="subject"
+                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Radar
+                        name="Skills"
+                        dataKey="A"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        fill="#3b82f6"
+                        fillOpacity={0.3}
+                    />
+                </RadarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+};
+
 // --- SCENARIO 1: COACHING ---
 const CoachingView = ({ data }: { data: CoachingReportData }) => (
     <div className="space-y-8">
         <GlassCard className="overflow-hidden">
             <SectionHeader icon={Briefcase} title="Coaching Scorecard" />
-            <div className="grid lg:grid-cols-2 gap-12">
+
+            {/* RADICAL VISUALIZATION */}
+            <div className="grid lg:grid-cols-2 gap-12 mb-8">
+                <div className="flex flex-col justify-center items-center bg-slate-950/20 rounded-2xl p-4 border border-white/5">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Skill Fingerprint</h3>
+                    <SkillsRadarChart data={data.scorecard} />
+                </div>
+                <div className="space-y-6 flex flex-col justify-center">
+                    <div className="bg-slate-950/30 p-6 rounded-xl border border-white/5">
+                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Behavioral Analysis</h3>
+                        <KeyValueRow label="Manager Tone" value={data.behavioral_signals?.manager_tone} highlight />
+                        <KeyValueRow label="Staff Openness" value={data.behavioral_signals?.staff_openness} />
+                        <KeyValueRow label="Psych Safety" value={data.behavioral_signals?.emotional_safety} />
+                        <KeyValueRow label="Staff Reaction" value={data.behavioral_signals?.staff_defensiveness} />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-8">
                 <div className="space-y-8">
                     {data.scorecard?.map((s, i) => (
                         <ScoreItem
@@ -585,13 +681,6 @@ const CoachingView = ({ data }: { data: CoachingReportData }) => (
                             alternative_questions={s.alternative_questions}
                         />
                     ))}
-                </div>
-                <div className="space-y-6 bg-slate-950/30 p-6 rounded-xl border border-white/5">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Behavioral Analysis</h3>
-                    <KeyValueRow label="Manager Tone" value={data.behavioral_signals?.manager_tone} highlight />
-                    <KeyValueRow label="Staff Openness" value={data.behavioral_signals?.staff_openness} />
-                    <KeyValueRow label="Psych Safety" value={data.behavioral_signals?.emotional_safety} />
-                    <KeyValueRow label="Staff Reaction" value={data.behavioral_signals?.staff_defensiveness} />
                 </div>
             </div>
         </GlassCard>
@@ -648,7 +737,7 @@ const CoachingView = ({ data }: { data: CoachingReportData }) => (
                 </div>
             </div>
         </GlassCard>
-    </div>
+    </div >
 )
 
 // --- SCENARIO 2: SALES ---
@@ -657,6 +746,10 @@ const SalesView = ({ data }: { data: SalesReportData }) => (
         <GlassCard>
             <SectionHeader icon={Target} title="Sales Performance" colorClass="text-emerald-400" bgClass="bg-emerald-500/10" />
             <div className="grid lg:grid-cols-2 gap-12">
+                <div className="flex flex-col justify-center items-center bg-slate-950/20 rounded-2xl p-4 border border-white/5 mb-8 lg:mb-0">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Performance Radar</h3>
+                    <SkillsRadarChart data={data.scorecard} />
+                </div>
                 <div className="space-y-8">
                     {data.scorecard?.map((s, i) => (
                         <ScoreItem
@@ -670,17 +763,17 @@ const SalesView = ({ data }: { data: SalesReportData }) => (
                         />
                     ))}
                 </div>
-                <div className="space-y-6">
-                    <div className="bg-slate-950/30 p-6 rounded-xl border border-white/5 space-y-4">
-                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Simulation Stats</h3>
-                        <KeyValueRow label="Objections" value={data.simulation_analysis?.objections_raised} />
-                        <KeyValueRow label="Escalation" value={data.simulation_analysis?.objection_escalation} />
-                        <KeyValueRow label="User Sentiment" value={data.simulation_analysis?.sentiment_trend} highlight />
-                    </div>
-                    <div className="bg-rose-500/5 p-6 rounded-xl border border-rose-500/10">
-                        <h4 className="text-xs font-bold text-rose-400 uppercase mb-2">Revenue Risk Factpr</h4>
-                        <p className="text-slate-200 font-medium">{data.revenue_impact?.price_risk}</p>
-                    </div>
+            </div>
+            <div className="space-y-6 mt-8">
+                <div className="bg-slate-950/30 p-6 rounded-xl border border-white/5 space-y-4">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Simulation Stats</h3>
+                    <KeyValueRow label="Objections" value={data.simulation_analysis?.objections_raised} />
+                    <KeyValueRow label="Escalation" value={data.simulation_analysis?.objection_escalation} />
+                    <KeyValueRow label="User Sentiment" value={data.simulation_analysis?.sentiment_trend} highlight />
+                </div>
+                <div className="bg-rose-500/5 p-6 rounded-xl border border-rose-500/10">
+                    <h4 className="text-xs font-bold text-rose-400 uppercase mb-2">Revenue Risk Factpr</h4>
+                    <p className="text-slate-200 font-medium">{data.revenue_impact?.price_risk}</p>
                 </div>
             </div>
         </GlassCard>

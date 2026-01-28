@@ -63,7 +63,7 @@ for i, item in enumerate(data):
     # Get embedding
     try:
         emb = client.embeddings.create(
-            model="text-embedding-ada-002",
+            model=os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002"),
             input=q
         ).data[0].embedding
         
